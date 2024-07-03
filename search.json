@@ -1,0 +1,582 @@
+[
+  {
+    "objectID": "ml_handbook/ppca.html",
+    "href": "ml_handbook/ppca.html",
+    "title": "Probabilistic PCA",
+    "section": "",
+    "text": "We first review standard PCA, and motivate the requirement for a probabilistic view.\nWe generatively model the PCA problem, and discuss solving this problem using the EM algorithm.\nMost of the ideas in this notebook are borrowed from PRML Bishop.\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom scipy.stats import multivariate_normal\nfrom scipy.stats import norm\nimport seaborn as sns\n\nimport warnings\nwarnings.filterwarnings('ignore')\n\nrng = np.random.default_rng(seed=12)",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Probabilistic PCA"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/ppca.html#generative-modelling",
+    "href": "ml_handbook/ppca.html#generative-modelling",
+    "title": "Probabilistic PCA",
+    "section": "Generative Modelling",
+    "text": "Generative Modelling\nIn generative modelling, we try to induce a latent variable \\(\\mathbf{Z}\\) of a lower dimension, which will help represent high-dimensional variable \\(\\mathbf{X}\\).\nIn the context of PCA, \\(\\mathbf{Z}\\) will represent the mappings of \\(\\mathbf{X}\\) on a lower dimensional subspace, which corresponds to the principal subspace.\nSo how do we introduce \\(\\mathbf{Z}\\)?\n\nA generative story\nLet \\(L\\) and \\(D\\) be the dimension of the latent space \\(\\mathbf{Z}\\) and data space \\(\\mathbf{X}\\) respectively.\nThe following steps are followed to generate a new sample \\(\\mathbf{x}\\):\n\nSample \\(\\mathbf{z}\\) from the prior defined as \\(p(\\mathbf{z}) = \\mathcal{N}(\\mathbf{z}|0, \\mathbf{I})\\)\nFurther, sample \\(\\mathbf{x}\\) using \\(\\mathbf{z}\\) from the conditional distribution \\(p(\\mathbf{x}|\\mathbf{z}) = \\mathcal{N}(\\mathbf{x}|\\mathbf{W}\\mathbf{z}+\\mathbf{\\mu}, σ^2\\mathbf{I})\\)\n\nWe require \\(\\mathbf{W}\\) to span a linear subspace, corresponding to the principal subspace of \\(\\mathbf{X}\\).\nWe illustrate this below for the simple case where \\(D=2, L=1\\). We obtain parameter values for the distribution from PCA performed above in the notebook. We see that the dataset can effectively be regenerated after estimating parameters of our model.\n\nfrom IPython.display import HTML\nfrom matplotlib import animation\n\nM, N = np.mgrid[-6:10:0.1, -6:10:0.1]\ngrid = np.dstack((M, N))\n\nx = np.linspace(-4, 4)\nz = rng.standard_normal()\nw = pc_vec/np.sqrt(pc_vec.T@pc_vec)\nn, d = X.shape\n\nmu = X.mean(axis=0)\ns2 = eig_val[0]\nX_gen = []\n\ntheta = np.linspace(0, 2*np.pi, 1000)\ncircle = np.c_[np.cos(theta), np.sin(theta)]\n\nfig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 5))\nnorm_pdf = ax1.plot(x, norm.pdf(x, 0, 1))\nax2_line = ax2.plot(x_range + X_mean[0], x_range * pc_vec[1] + X_mean[1], color='black')\n\n# zeroth frame - pdf, line graph\ndefault = norm_pdf + ax2_line\nartists = [list(default)]\n\nfor _ in range(15):\n  # sampling x\n  x_mean = np.expand_dims(z*w+mu, -1).T\n  x = rng.multivariate_normal(z*w+mu, cov=s2*np.eye(2))\n\n  frame = list(default)\n\n  # first frame - sample z\n  z = rng.standard_normal()\n  frame.append(ax1.scatter(z, 0, marker='x', color='red'))\n\n  artists.append(list(frame))\n\n  # second frame - visualize p(x|z)\n  frame += ax2.plot((x_mean + 0.5*s2*circle)[:, 0], (x_mean + 0.5*s2*circle)[:, 1], color='red')\n  frame += ax2.plot((x_mean + 1*s2*circle)[:, 0], (x_mean + 1*s2*circle)[:, 1], color='red')\n  frame += ax2.plot((x_mean + 1.5*s2*circle)[:, 0], (x_mean + 1.5*s2*circle)[:, 1], color='red')\n\n  artists.append(list(frame))\n\n  # third frame - sample x, show collection\n  frame.append(ax2.scatter(x[0], x[1], color='orange', marker='x'))\n  new_point_plot = ax3.scatter(x[0], x[1], color='orange', s=10)\n  frame.append(new_point_plot)\n  artists.append(list(frame))\n\n  # preserve new point by incrementing default collection\n  default.append(new_point_plot)\n\nelse:\n  frame = list(default)\n  probability_grid = multivariate_normal(X.mean(axis=0), w@w.T + s2*np.eye(d)).pdf(grid)\n  frame += ax2.contour(M, N, probability_grid).collections\n  frame += ax3.contour(M, N, probability_grid).collections\n\nartists.append(list(frame))\n\nplt.close()\nax3.sharex(ax2);\nax3.sharey(ax2);\nax2.axis('scaled');ax3.axis('scaled');\n\nax1.title.set_text('Sampling z from latent space')\nax2.title.set_text('Sampling x from data space')\nax3.title.set_text('Collection of sampled points')\n\nanim = animation.ArtistAnimation(fig, artists, interval=600, repeat=False, blit=False);\nHTML(anim.to_jshtml())\n\n\n\n\n\n\n\n\n  \n  \n    \n    \n      \n          \n      \n        \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n    \n    \n      \n      Once\n      \n      Loop\n      \n      Reflect\n    \n  \n\n\n\n\n\n\nIn the final frame of the above animation, we see that the genrative story effectively reduces to the sampling of \\(\\mathbf{X}\\) from the following distribution: \\[\n\\begin{alignat}{2}\n&& p(\\mathbf{x}) &= \\int{p(\\mathbf{x}|\\mathbf{z})p(\\mathbf{z}) d\\mathbf{z}} \\\\\n&& &= \\mathcal{N}(\\mathbf{x}|\\mathbf{\\mu}, \\mathbf{W}\\mathbf{W}^T + σ^2\\mathbf{I})\n\\end{alignat}\n\\]\nThe above derivation is easy by noting that \\(p(\\mathbf{x})\\) is gaussian. So one can just find the mean and covariance:\n\\[\n\\begin{aligned}\n\\mathbb{E}[\\mathbf{x}] & =\\mathbb{E}[\\mathbf{W} \\mathbf{z}+\\mu+\\epsilon]=\\mu \\\\\n\\operatorname{cov}[\\mathbf{x}] & =\\mathbb{E}\\left[(\\mathbf{W} \\mathbf{z}+\\epsilon)(\\mathbf{W} \\mathbf{z}+\\epsilon)^T\\right] \\\\\n& =\\mathbb{E}\\left[\\mathbf{W} \\mathbf{z z}^{\\mathbf{T}} \\mathbf{W}^{\\mathbf{T}}\\right]+\\mathbb{E}\\left[\\epsilon \\epsilon^{\\mathbf{T}}\\right]=\\mathbf{W} \\mathbf{W}^{\\mathbf{T}}+\\sigma^2 \\mathbf{I}\n\\end{aligned}\n\\]",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Probabilistic PCA"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/ppca.html#e-step",
+    "href": "ml_handbook/ppca.html#e-step",
+    "title": "Probabilistic PCA",
+    "section": "E-step",
+    "text": "E-step\nThe E-step estimates the conditional distribution of the hidden variables \\(\\mathbf{Z}\\) given the data \\(\\mathbf{X}\\) and the current values of the model parameters \\(\\mathbf{W, σ^2}\\) (note that ML estimate of \\(\\mathbf{\\mu}\\) is simply the sample mean \\(\\mathbf{\\overline{X}}\\), so it can simly be mean-centered in the preprocessing step)\n\\[\n\\begin{alignat}{2}\nΣ_\\mathbf{Z} &= σ^2(σ^2\\mathbf{I}+\\mathbf{W^T W})^{-1}, \\\\\n\\mathbf{Z} &= \\frac{1}{σ^2}Σ_\\mathbf{Z}\\mathbf{W}^T\\mathbf{Y}\n\\end{alignat}\n\\]",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Probabilistic PCA"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/ppca.html#m-step",
+    "href": "ml_handbook/ppca.html#m-step",
+    "title": "Probabilistic PCA",
+    "section": "M-step",
+    "text": "M-step\nThe M-Step re-estimates the model paramters as\n\\[\\begin{aligned}\n\\mathbf{W} & =\\mathbf{Y} {\\mathbf{Z}}^{\\mathrm{T}}\\left({\\mathbf{Z Z}}^{\\mathrm{T}}+n \\Sigma_{\\mathbf{Z}}\\right)^{-1}, \\\\\nσ^2 & =\\frac{1}{ND} \\sum_{i=1}^d \\sum_{j=1}^n\\left(y_{i j}-\\mathbf{w}_i^{\\mathrm{T}} {\\mathbf{z}}_j\\right)^2+\\frac{1}{d} \\operatorname{tr}\\left(\\mathbf{W} \\Sigma_{\\mathbf{Z}} \\mathbf{W}^{\\mathrm{T}}\\right) .\n\\end{aligned}\\]\n\n# Initialization\nX_ = (X-X.mean(axis=0)).T\nW = np.array([[1, -1]]).T\ns2 = 0.1\n\nartists = []\nfig, ax = plt.subplots(dpi=150)\nax.sharex(ax2)\nax.sharey(ax2)\n\ndefault = [ax.scatter(X[:, 0], X[:, 1], s=10)]\n\nfor _ in range(7):\n  frame = list(default)\n  pc = W.T[0]/W.T[0][0]\n  probability_grid = multivariate_normal(X.mean(axis=0), W@W.T + s2*np.eye(d)).pdf(grid)\n\n  frame += ax.contour(M, N, probability_grid).collections\n  frame +=  ax.plot(x_range + X_mean[0], x_range * pc[1] + X_mean[1], color='black')\n\n  # E-step\n  cov_Z = s2*np.linalg.inv(s2*np.eye(W.shape[1]) + W.T@W)\n  Z = cov_Z*W.T@X_ / s2\n\n  # M-step\n  W = X_@Z.T@np.linalg.inv(Z@Z.T + X_.shape[1]*cov_Z)\n  s2 = ((X_-W@Z)**2).sum()/(n*d) + np.trace(W@cov_Z@W.T)/d\n  artists.append(frame)\n\nplt.close()\nanim = animation.ArtistAnimation(fig, artists, interval=500, repeat=False, blit=False);\nHTML(anim.to_jshtml())\n\n\n\n\n\n\n\n\n  \n  \n    \n    \n      \n          \n      \n        \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n    \n    \n      \n      Once\n      \n      Loop\n      \n      Reflect",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Probabilistic PCA"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/inductive_bias.html",
+    "href": "ml_handbook/inductive_bias.html",
+    "title": "Inductive Bias in ML Algorithms",
+    "section": "",
+    "text": "from matplotlib import pyplot as plt\nimport numpy as np\n\nplt.rcParams['figure.figsize'] = (14, 6.3)\nplt.rcParams['figure.dpi'] = 150\nplt.rcParams['lines.markersize'] = 4.2\n\nX, y = [], []\nr, c = -1, -1\nd = 4\nn = 6\nfor i in np.linspace(0, 3, num=d*n):\n  r += 1\n  for j in np.linspace(0, 3, num=d*n):\n    c += 1\n    X.append([i, j])\n    y.append(int(bool((r//n)%2) and not bool((c//n)%2) or not bool((r//n)%2) and bool((c//n)%2)))\n\nX = np.array(X)\nX -= np.mean(X, axis=0)\ny = np.array(y)\n\nr = np.pi/4\nrotate = np.array([[np.cos(r), np.sin(r)], [np.sin(r), -np.cos(r)]])\nX_rotated = X@rotate\n\nfig, (ax1, ax2) = plt.subplots(1, 2)\nax1.scatter(X[:, 0][y==0], X[:, 1][y==0], color='red', label='y==0', alpha=0.5, edgecolor='k')\nax1.scatter(X[:, 0][y==1], X[:, 1][y==1], color='blue', label='y==1', alpha=0.5, edgecolor='k')\nax1.legend()\nax1.set_title('Chessboard')\n\nax2.scatter(X_rotated[:, 0][y==0], X_rotated[:, 1][y==0], color='red', label='y==0', alpha=0.5, edgecolor='k')\nax2.scatter(X_rotated[:, 0][y==1], X_rotated[:, 1][y==1], color='blue', label='y==1', alpha=0.5, edgecolor='k')\nax2.legend()\nax2.set_title('Chessboard (Rotated)')\n\nText(0.5, 1.0, 'Chessboard (Rotated)')",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Inductive Bias in ML Algorithms"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/inductive_bias.html#construct-a-checkerboard-dataset",
+    "href": "ml_handbook/inductive_bias.html#construct-a-checkerboard-dataset",
+    "title": "Inductive Bias in ML Algorithms",
+    "section": "",
+    "text": "from matplotlib import pyplot as plt\nimport numpy as np\n\nplt.rcParams['figure.figsize'] = (14, 6.3)\nplt.rcParams['figure.dpi'] = 150\nplt.rcParams['lines.markersize'] = 4.2\n\nX, y = [], []\nr, c = -1, -1\nd = 4\nn = 6\nfor i in np.linspace(0, 3, num=d*n):\n  r += 1\n  for j in np.linspace(0, 3, num=d*n):\n    c += 1\n    X.append([i, j])\n    y.append(int(bool((r//n)%2) and not bool((c//n)%2) or not bool((r//n)%2) and bool((c//n)%2)))\n\nX = np.array(X)\nX -= np.mean(X, axis=0)\ny = np.array(y)\n\nr = np.pi/4\nrotate = np.array([[np.cos(r), np.sin(r)], [np.sin(r), -np.cos(r)]])\nX_rotated = X@rotate\n\nfig, (ax1, ax2) = plt.subplots(1, 2)\nax1.scatter(X[:, 0][y==0], X[:, 1][y==0], color='red', label='y==0', alpha=0.5, edgecolor='k')\nax1.scatter(X[:, 0][y==1], X[:, 1][y==1], color='blue', label='y==1', alpha=0.5, edgecolor='k')\nax1.legend()\nax1.set_title('Chessboard')\n\nax2.scatter(X_rotated[:, 0][y==0], X_rotated[:, 1][y==0], color='red', label='y==0', alpha=0.5, edgecolor='k')\nax2.scatter(X_rotated[:, 0][y==1], X_rotated[:, 1][y==1], color='blue', label='y==1', alpha=0.5, edgecolor='k')\nax2.legend()\nax2.set_title('Chessboard (Rotated)')\n\nText(0.5, 1.0, 'Chessboard (Rotated)')",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Inductive Bias in ML Algorithms"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/inductive_bias.html#inductive-bias",
+    "href": "ml_handbook/inductive_bias.html#inductive-bias",
+    "title": "Inductive Bias in ML Algorithms",
+    "section": "Inductive bias",
+    "text": "Inductive bias\n\nAnything which makes the algorithm learn one pattern instead of another pattern.\n\nDecision trees use a step-function collection for classification; but these step functions utilize one feature/variable only. Is this phenomenon sensitive to the nature of the dataset?\n\nfrom sklearn.inspection import DecisionBoundaryDisplay\nfrom sklearn.tree import DecisionTreeClassifier\nfrom sklearn.tree import plot_tree\n\nDTree = DecisionTreeClassifier()\nDTree.fit(X, y)\n\nfig, (ax1, ax2) = plt.subplots(1, 2)\n\ndisp = DecisionBoundaryDisplay.from_estimator(DTree, X, response_method=\"predict\", grid_resolution=1000, alpha=0.6, ax = ax1)\ndisp.ax_.scatter(X[:, 0][y==0], X[:, 1][y==0], color='red', label='y==0', edgecolor='k', alpha=0.5)\ndisp.ax_.scatter(X[:, 0][y==1], X[:, 1][y==1], color='blue', label='y==1', edgecolor='k', alpha=0.5)\ndisp.ax_.set_xlabel(f'Tree Depth: {DTree.get_depth()}');\n\nplot_tree(DTree, label='none', filled=True, feature_names=['F1', 'F2'], class_names=['Red', 'Blue'], node_ids=False, rounded=True, impurity=False, ax=ax2);\n\n\n\n\n\n\n\n\nThe 4x4 checkerboard dataset with alternating classes requires a tree of depth=7 to capture its structure respectively.\nBut what will happen if we try to train a tree on the rotated variant of this dataset?\n\nfig, (ax1, ax2) = plt.subplots(1, 2)\n\nDTree_rotated = DecisionTreeClassifier()\nDTree_rotated.fit(X_rotated, y)\n\ndisp = DecisionBoundaryDisplay.from_estimator(DTree_rotated, X_rotated, response_method=\"predict\", grid_resolution=1000, alpha=0.6, ax=ax1)\ndisp.ax_.scatter(X_rotated[:, 0][y==0], X_rotated[:, 1][y==0], color='red', label='y==0', edgecolor='k', alpha=0.5)\ndisp.ax_.scatter(X_rotated[:, 0][y==1], X_rotated[:, 1][y==1], color='blue', label='y==1', edgecolor='k', alpha=0.5)\ndisp.ax_.set_xlabel(f'(Overfit) Tree Depth: {DTree_rotated.get_depth()}')\n\nDTree_rotated_constrained = DecisionTreeClassifier(max_depth=7)\nDTree_rotated_constrained.fit(X_rotated, y)\n\ndisp = DecisionBoundaryDisplay.from_estimator(DTree_rotated_constrained, X_rotated, response_method=\"predict\", grid_resolution=1000, alpha=0.6, ax=ax2)\ndisp.ax_.scatter(X_rotated[:, 0][y==0], X_rotated[:, 1][y==0], color='red', label='y==0', edgecolor='k', alpha=0.5)\ndisp.ax_.scatter(X_rotated[:, 0][y==1], X_rotated[:, 1][y==1], color='blue', label='y==1', edgecolor='k', alpha=0.5)\ndisp.ax_.set_xlabel(f'(Constrained) Tree Depth: {DTree_rotated_constrained.get_depth()}');\n\n\n\n\n\n\n\n\n\nOh!\nThe model fails to understand the generation rationale of the dataset as it suffers an inductive bias of axis-parallel splitting.",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Inductive Bias in ML Algorithms"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/inductive_bias.html#being-mindful-of-the-bias",
+    "href": "ml_handbook/inductive_bias.html#being-mindful-of-the-bias",
+    "title": "Inductive Bias in ML Algorithms",
+    "section": "Being Mindful of the Bias",
+    "text": "Being Mindful of the Bias\nThe above dataset has a seperator corresponding to a second order function of the features.\nTransform the dataset and apply perceptron! Alter inductive bias to our advantage\n\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import PolynomialFeatures\nfrom sklearn.linear_model import Perceptron\n\npoly_perceptron = make_pipeline(PolynomialFeatures(2), Perceptron(alpha=0, max_iter=int(1e6), tol=None))\npoly_perceptron.fit(X, y)\n\nfig, (ax1) = plt.subplots(1, 1)\ndisp = DecisionBoundaryDisplay.from_estimator(poly_perceptron, X, response_method=\"predict\", grid_resolution=1000, alpha=0.6, ax=ax1)\ndisp.ax_.scatter(X[:, 0][y==-1], X[:, 1][y==-1], color='red', label='y==-1', edgecolor='k', alpha=0.5)\ndisp.ax_.scatter(X[:, 0][y==1], X[:, 1][y==1], color='blue', label='y==1', edgecolor='k', alpha=0.5)\ndisp.ax_.set_xlabel(f'Poly-Perceptron | Score: {poly_perceptron.score(X, y)}');",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Inductive Bias in ML Algorithms"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/agglomerative_clustering.html",
+    "href": "ml_handbook/agglomerative_clustering.html",
+    "title": "Hierarchical Clustering",
+    "section": "",
+    "text": "import numpy as np\nimport matplotlib.pyplot as plt\nfrom scipy.cluster.hierarchy import dendrogram\n\nX = np.array([\n    [5, 5], [5, 6],\n    [7, 5], [8, 6],\n    [6, 10], [5, 12], [8, 10]\n])\n\nplt.scatter(X[:, 0], X[:, 1])\nplt.axis('equal');",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Hierarchical Clustering"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/agglomerative_clustering.html#hierarchical-clustering",
+    "href": "ml_handbook/agglomerative_clustering.html#hierarchical-clustering",
+    "title": "Hierarchical Clustering",
+    "section": "Hierarchical Clustering",
+    "text": "Hierarchical Clustering\nGenerates hierarchical structures where the clusters formed at each stage are formed by combining clusters from the preceding stage. They are popularly represented using dendrograms.\nTwo strategies for Hierarchcical Clustering: - Agglomerative (bottom-up): Start at the bottom and at each level recursively merge a selected pair of clusters into a single cluster. Candidate cluster-pair for merging will have smallest inter-group dissimilarity. - Divisive (top-down): Start at the top and at each level recursively split one of the existing clusters at that level into two new clusters. Candidate cluster-split will result in largest betweein-group dissimilarity.\nThe measure of dissimalarity is governed by a linkage function. The linkage function will utilize a \\(n\\times n\\) pairwise dissimilarity matrix (in this notebook the distance between points is considered) to output cluster-dissimilarites, based on the type of linkage used.\nOur main focus will be on examining the Agglomerative clustering approach, in conjunction with three linkage methods: Single, Complete, and Average.\nAn application of Hierarchial Clustering!",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Hierarchical Clustering"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/agglomerative_clustering.html#agglomerative-clustering",
+    "href": "ml_handbook/agglomerative_clustering.html#agglomerative-clustering",
+    "title": "Hierarchical Clustering",
+    "section": "Agglomerative Clustering",
+    "text": "Agglomerative Clustering\nThe function agglomerative constructs a linkage matrix that encodes the hierarchical clustering, given a linkage function.\nMimics the behaviour of scipy.cluster.hierarchy.linkage\nReturns a \\((n-1) \\times 4\\) matrix where: - 1st and 2nd elements denote the index of the merged clusters - 3rd element denotes the linkage value - 4th element denotes the number of values in the merged cluster\nThe above scaffolding is what is implemented in the scipy library, and we attempt to replicate it here.\nThis allows the usage of scipy.cluster.hierarchy.dendrogram to visualize the clustering.\n\nfrom itertools import combinations\n\ndef agglomerative(X, linkage):\n\n  clusters = [[tuple(i)] for i in X]\n  n = len(X)\n\n  X_i = dict(zip([tuple(i) for i in X], range(n)))\n  merged = []\n  linkage_matrix = []\n  Zs = []\n\n  for _ in range(n-1):\n\n    min_dist = np.inf\n    current_clusters = [i for i in range(len(clusters)) if i not in merged]\n\n    # Compute linkage for all clusters pairwise to find best cluster-pair\n    for c1, c2 in combinations(current_clusters, 2):\n\n      linkage_val = linkage(clusters[c1], clusters[c2])\n\n      # Find cluster-pair with smallest linkage\n      if linkage_val &lt; min_dist:\n        min_dist = linkage_val\n        best_pair = sorted([c1, c2])\n\n    # Merge the best pair and append to clusters\n    clusters.append(clusters[best_pair[0]] + clusters[best_pair[1]])\n\n    # Add best pair clusters to merged\n    merged += best_pair\n\n    linkage_matrix.append(best_pair + [min_dist, len(clusters[-1])])\n\n    # Append cluster indicator array Z to Zs\n    Z = np.zeros(n)\n    for c in current_clusters:\n      for i in clusters[c]:\n        Z[X_i[i]] = c\n\n    Zs.append(Z)\n\n  Zs.append([len(clusters)-1]*n)\n\n  return np.array(linkage_matrix), np.array(Zs)\n\n\nLinkage 1: Single Linkage\nConsiders the intergroup dissimilarity to be that of the closest (least dissimilar) pair. Also called the nearest-neighbour technique.\n\\[ d_{SL}(C_1, C_2) = \\min _ {i \\in C_1 \\\\ j \\in C_2} d_{ij} \\] \n\ndef single(cluster_1, cluster_2):\n  single_linkage_val = np.inf\n\n  for p1 in cluster_1:\n    for p2 in cluster_2:\n\n      p1_p2_dist = np.linalg.norm(np.array(p1)-np.array(p2))\n\n      if single_linkage_val &gt; p1_p2_dist:\n        single_linkage_val = p1_p2_dist\n\n  return single_linkage_val\n\n\nl_mat, Zs = agglomerative(X, single)\ndendrogram(l_mat, leaf_label_func=lambda i: str(tuple(X[i])), leaf_rotation=-45, color_threshold=3);\n\n\n\n\n\n\n\n\n\n\nDendrograms - How to read them\nDendrograms provides a highly interpretable complete description of the hierarchical clustering in a graphical format.\nThe y-axis indicates the value of the inter-group dissimilarity. Cutting the dendrogram horizontally at a particular height partitions the data into disjoint clusters represented by the vertical lines that intersect it. These are the clusters that would be produced by terminating the procedure when the optimal intergroup dissimilarity exceeds that threshold cut value.\n\ndef cluster_rename(Z):\n  renamed_Z = []\n  mapping = {}\n  x = len(Z)\n\n  for i in Z:\n    try:\n      renamed_Z.append(mapping[i])\n    except:\n      mapping[i] = x\n      x -= 1\n      renamed_Z.append(mapping[i])\n\n  return renamed_Z\n\ndef plot_ellipse(X, ax):\n  cov = np.cov(X[:, 0], X[:, 1])\n  val, rot = np.linalg.eig(cov)\n  val = np.sqrt(val)\n  if min(val)&lt;=0.01:\n    val += 0.2 * max(val)\n  center = np.mean([X[:, 0], X[:, 1]], axis=1)[:, None]\n\n  t = np.linspace(0, 2.0 * np.pi, 1000)\n  xy = np.stack((np.cos(t), np.sin(t)), axis=-1)\n\n  return ax.plot(*(2 * rot @ (val * xy).T + center))\n\n\nfrom IPython.display import HTML\nfrom matplotlib import animation\n\nfig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 6))\ndendrogram(l_mat, ax=ax2, leaf_label_func=lambda i: str(tuple(X[i])), leaf_rotation=-45);\nartists = []\nsplit_vals = list(l_mat[:, 2])\nsplit_vals = np.array([0] + split_vals + [split_vals[-1]*1.05])\n\nfor i in range(len(Zs)):\n  frame = []\n  frame.append(ax1.scatter(X[:, 0], X[:, 1], c=cluster_rename(Zs[i]), s=500))\n  for c in set(Zs[i]):\n    if sum(Zs[i]==c) &gt; 1:\n      frame += plot_ellipse(X[Zs[i]==c], ax1)\n  frame.append(ax2.axhline(y=split_vals[i:i+2].mean(), color='red'))\n  artists.append(frame)\n\nplt.close()\n\nanim = animation.ArtistAnimation(fig, artists, interval=1000, repeat=False, blit=False);\nHTML(anim.to_jshtml())\n\n\n\n\n\n\n\n\n  \n  \n    \n    \n      \n          \n      \n        \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n    \n    \n      \n      Once\n      \n      Loop\n      \n      Reflect\n    \n  \n\n\n\n\n\n\n\n\nLinkage 2: Complete Linkage\nConsiders the intergroup dissimilarity to be that of the furthest (most dissimilar) pair. Also called the furthest-neighbour, Voorhees technique.\n\\[ d_{CL}(C_1, C_2) = \\max _ {i \\in C_1 \\\\ j \\in C_2} d_{ij} \\] \n\ndef complete(cluster_1, cluster_2):\n  complete_linkage_val = 0\n\n  for p1 in cluster_1:\n    for p2 in cluster_2:\n\n      p1_p2_dist = np.linalg.norm(np.array(p1)-np.array(p2))\n\n      if complete_linkage_val &lt; p1_p2_dist:\n        complete_linkage_val = p1_p2_dist\n\n  return complete_linkage_val\n\n\nl_mat, Zs = agglomerative(X, complete)\ndendrogram(l_mat, leaf_label_func=lambda i: str(tuple(X[i])), leaf_rotation=-45, color_threshold=3);\n\n\n\n\n\n\n\n\nSame clustering is achieved. Can you think about cases where the results would differ?\nLet’s try to investigate the difference between these linkage metrics, by constructing the following toy dataset:\n\nX = np.array([\n    [1, 1], [2, 1],\n    [4, 1], [5, 1],\n    [1, 4], [2, 4],\n    [4, 4], [5, 4],\n])\n\nplt.scatter(X[:, 0], X[:, 1])\nplt.axis('equal');\n\n\n\n\n\n\n\n\n\nfig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))\nl_mat_1, Zs_1 = agglomerative(X, single)\ndendrogram(l_mat_1, leaf_label_func=lambda i: str(tuple(X[i])), leaf_rotation=-45, color_threshold=3, ax=ax1);\nl_mat_2, Zs_2 = agglomerative(X, complete)\ndendrogram(l_mat_2, leaf_label_func=lambda i: str(tuple(X[i])), leaf_rotation=-45, color_threshold=3, ax=ax2);\n\n\n\n\n\n\n\n\nNote that the above hierarchies are not equal (even though they seem to be, visually). The ordering of the singletons (X-axis) is not the same.\nLet’s take a look at how the clusters are formed at each time step:\n\nfig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 6))\nartists = []\n\nfor i in range(len(Zs_1)):\n  frame = []\n  frame.append(ax1.scatter(X[:, 0], X[:, 1], c=cluster_rename(Zs_1[i]), s=500))\n  frame.append(ax2.scatter(X[:, 0], X[:, 1], c=cluster_rename(Zs_2[i]), s=500))\n\n  for c in set(Zs_1[i]):\n    if sum(Zs_1[i]==c) &gt; 1:\n      frame += plot_ellipse(X[Zs_1[i]==c], ax1)\n\n  for c in set(Zs_2[i]):\n    if sum(Zs_2[i]==c) &gt; 1:\n      frame += plot_ellipse(X[Zs_2[i]==c], ax2)\n\n  artists.append(frame)\n\nplt.close()\n\nanim = animation.ArtistAnimation(fig, artists, interval=1000, repeat=False, blit=False);\nHTML(anim.to_jshtml())\n\n\n\n\n\n\n\n\n  \n  \n    \n    \n      \n          \n      \n        \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n    \n    \n      \n      Once\n      \n      Loop\n      \n      Reflect\n    \n  \n\n\n\n\n\n\nObservations: - Single linkage has a tendence to combine observations linked by a series of close intermediate observations - chaining. - Complete linkage tend to produce compact clusters with small diameters. (Can result in elements being close to members of other clusters than to their own)\n\nfrom sklearn.datasets import make_moons\n\nX, y = make_moons(n_samples=99, noise=0.05, random_state=170)\n\nl_mat_1, Zs_1 = agglomerative(X, single)\nl_mat_2, Zs_2 = agglomerative(X, complete)\n\n# Plot (n-1)th timestep - 2 clusters\nfig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 6))\nax1.scatter(X[:, 0], X[:, 1], c=cluster_rename(Zs_1[-2]), s=50)\nax2.scatter(X[:, 0], X[:, 1], c=cluster_rename(Zs_2[-2]), s=50)\n\n\n\n\n\n\n\n\n\n\nLinkage 3: Average Linkage\nConsiders the average dissimilarity between the groups\n\\[ d_{GA}(C_1, C_2) = \\frac{1}{|C_1|*|C_2|}\\sum _ {i \\in C_1} \\sum _ {j \\in C_2} d_{ij} \\]\n\n\n\nimage.png\n\n\n\ndef average(cluster_1, cluster_2):\n  average_linkage_val = 0\n\n  for p1 in cluster_1:\n    for p2 in cluster_2:\n\n      p1_p2_dist = np.linalg.norm(np.array(p1)-np.array(p2))\n      average_linkage_val += p1_p2_dist\n\n  return average_linkage_val/(len(cluster_1)*len(cluster_2))",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Hierarchical Clustering"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/agglomerative_clustering.html#cluster-maps",
+    "href": "ml_handbook/agglomerative_clustering.html#cluster-maps",
+    "title": "Hierarchical Clustering",
+    "section": "Cluster-Maps",
+    "text": "Cluster-Maps\nHierarchical clustering also results in a partial ordering of our samples. This ordering can be investigated, when it is coupled along with a heat-map.\n\nimport seaborn as sns\n\niris = sns.load_dataset(\"iris\", cache=False)\nspecies = iris.pop(\"species\")\n\nlut = dict(zip(species.unique(), \"rbg\"))\nrow_colors = species.map(lut)\n\nsns.clustermap(iris, cmap=\"mako\", vmin=0, vmax=10, row_colors=row_colors, method='average')",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Hierarchical Clustering"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w6_regularization_validation.html",
+    "href": "mlt_taship/w6_regularization_validation.html",
+    "title": "Regularization & Validation",
+    "section": "",
+    "text": "For an input \\(x_i\\), we generate a label \\(y_i\\) by using a fixed \\(\\mathbf{w}\\) and a random normal variable \\(ϵ ∼ N(0, 0.1^2)\\) in the following fashion:\n\\[ y_i = \\mathbf{w}^{T}x_i + ϵ\\]\nWe generate a dataset with 100 samples, each having 50 features. We sample the first 25 features from a gaussian - meaning they are uncorrelated, and add 25 more features that are linearly correlated with the current ones.\n\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom sklearn.datasets import make_regression\n\nn = 100\nd = 25\n\n# Dataset with 25 uncorrelated features\nnp.random.seed(7)\n# X = np.random.normal(size=(n, d))\n\nX, y = make_regression(n_samples=n, n_features=d, noise=1, random_state=2)\n\n# Add 25 correlated features:\nfor j in range(d):\n  a = np.random.normal(size=d+j)\n  new_feature = X@np.vectorize(lambda i: int(i)*np.random.randint(-2, high=2))(a&gt;1)\n  X = np.c_[X, new_feature]\n\nX = X.T\n\nplt.matshow(np.corrcoef(X))\ncb = plt.colorbar()\ncb.ax.tick_params()\nplt.title('Correlation Matrix');\n\n\n\n\n\n\n\n\nWe then make a sparse \\(\\mathbf{w}\\) vector with 10/50 features non-zero. We use this to generate \\(\\mathbf{y}\\) using the model discussed above.\n\nd *= 2\nnp.random.seed(69)\nr_d = 10\n\n# Make sparse w with 10 features\nw = np.zeros(d)\nrelevant = np.random.randint(0, high=d-1, size=r_d)\n\n# Assign some weight to these features only\nw[relevant] = np.random.normal(scale=2, size=r_d)\n\n# Create some noise, and find predictors\ny = w.T @ X + np.random.normal(scale=0.01, size=n)",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "Regularization & Validation"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w6_regularization_validation.html#data-generation-with-correlated-features",
+    "href": "mlt_taship/w6_regularization_validation.html#data-generation-with-correlated-features",
+    "title": "Regularization & Validation",
+    "section": "",
+    "text": "For an input \\(x_i\\), we generate a label \\(y_i\\) by using a fixed \\(\\mathbf{w}\\) and a random normal variable \\(ϵ ∼ N(0, 0.1^2)\\) in the following fashion:\n\\[ y_i = \\mathbf{w}^{T}x_i + ϵ\\]\nWe generate a dataset with 100 samples, each having 50 features. We sample the first 25 features from a gaussian - meaning they are uncorrelated, and add 25 more features that are linearly correlated with the current ones.\n\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom sklearn.datasets import make_regression\n\nn = 100\nd = 25\n\n# Dataset with 25 uncorrelated features\nnp.random.seed(7)\n# X = np.random.normal(size=(n, d))\n\nX, y = make_regression(n_samples=n, n_features=d, noise=1, random_state=2)\n\n# Add 25 correlated features:\nfor j in range(d):\n  a = np.random.normal(size=d+j)\n  new_feature = X@np.vectorize(lambda i: int(i)*np.random.randint(-2, high=2))(a&gt;1)\n  X = np.c_[X, new_feature]\n\nX = X.T\n\nplt.matshow(np.corrcoef(X))\ncb = plt.colorbar()\ncb.ax.tick_params()\nplt.title('Correlation Matrix');\n\n\n\n\n\n\n\n\nWe then make a sparse \\(\\mathbf{w}\\) vector with 10/50 features non-zero. We use this to generate \\(\\mathbf{y}\\) using the model discussed above.\n\nd *= 2\nnp.random.seed(69)\nr_d = 10\n\n# Make sparse w with 10 features\nw = np.zeros(d)\nrelevant = np.random.randint(0, high=d-1, size=r_d)\n\n# Assign some weight to these features only\nw[relevant] = np.random.normal(scale=2, size=r_d)\n\n# Create some noise, and find predictors\ny = w.T @ X + np.random.normal(scale=0.01, size=n)",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "Regularization & Validation"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w6_regularization_validation.html#bias-variance-decomposition-of-mse",
+    "href": "mlt_taship/w6_regularization_validation.html#bias-variance-decomposition-of-mse",
+    "title": "Regularization & Validation",
+    "section": "Bias-Variance Decomposition of MSE",
+    "text": "Bias-Variance Decomposition of MSE\nThe above formula for mean squared error can be rewritten as\n\\[\\text{MSE}(\\mathbf{\\hat{w}}) = \\text{tr}(\\text{Var}(\\mathbf{\\hat{w}})) + ||\\text{Bias}(\\mathbf{\\hat{w}})||^2\\]\nwhere \\(\\text{tr}(\\text{Var}(\\mathbf{\\hat{w}}))\\) is the trace of the covariance matrix, and \\[\\text{Bias}(\\mathbf{\\hat{w}}) = \\mathbb{E}[\\mathbf{\\hat{w}}] - \\mathbf{w}\\]\nis the bias, i.e, the expected difference between the estimator \\(\\mathbf{\\hat{w}}\\) and true value \\(\\mathbf{w}\\).\n\nApplying Bias-Variance decomposition on ML Estimator of w\nThe ML Estimator has zero bias; so we get\n\\[\\begin{alignat}{2}\n&& \\text{MSE}(\\mathbf{\\hat{w}}_{ML})\n& = \\text{tr}(\\text{Var}(\\mathbf{\\hat{w}}_{ML})) \\\\\n&&\n& = \\sigma^2 ̇* \\text{tr}((XX^T)^{-1})\n\\end{alignat}\\]\n\n\nDerivation of decomposition\nWe use the below well-known formula relating the covariance matrix \\(\\text{Var}(X)\\) to the first and second moments: \\[\\mathbb{E}[X^2] = (\\mathbb{E}[X])^2 + \\text{Var}(X)\\]\nTherefore we have,\n\\[\n\\begin{alignat}{2}\n&& \\text{MSE}(\\mathbf{\\hat{w}})\n& = \\mathbb{E}[||\\mathbf{\\hat{w}} - \\mathbf{w}||^2] \\\\\n&& & = (\\mathbb{E}[||\\mathbf{\\hat{w}} - \\mathbf{w}||])^2 + \\text{Var}(||\\mathbf{\\hat{w}} - \\mathbf{w}||)\\\\\n&& & = ||\\mathbb{E}[\\mathbf{\\hat{w}}] - \\mathbf{w}||^2 + \\text{Var}(||\\mathbf{\\hat{w}}||) \\\\\n&& & = ||\\text{Bias}(\\mathbf{\\hat{w}})||^2 + \\text{tr}(\\text{Var}(\\mathbf{\\hat{w}}))\n\\end{alignat}\n\\]\nSource: Wikipedia",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "Regularization & Validation"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w6_regularization_validation.html#in-pursuit-of-a-better-estimator",
+    "href": "mlt_taship/w6_regularization_validation.html#in-pursuit-of-a-better-estimator",
+    "title": "Regularization & Validation",
+    "section": "In pursuit of a better estimator",
+    "text": "In pursuit of a better estimator\nWe see that the goodness of the ML estimate depends on the variance of error \\(σ^2\\) and \\(\\text{tr}((XX^T)^{-1})\\). We would like to reduce this quantity.\nThe variance of error is inherent to the experimental setup, and reduction of this quantity therefore depends on qualitative improvements of instruments/peripherals used to collect data. So we cannot hope to reduce this quantity from a mathematical perspective.\nThe trace depends on \\((XX^T)^{-1}\\), which denotes the inverse covariance matrix of the data \\(X\\). The covariance matrix captures how the features are related with each other, and it seems that this relation affects the goodness of our estimator. We may try to tweak this value to reduce the trace value, thereby increasing the goodness of our ML estimator.\n\nReducing the Trace value\nThe trace of a matrix \\(X\\) can also be represented as the sum of the eigenvalues of \\(X\\).\nLet \\(\\mathbf{λ}\\) denote the set of eigenvalues of \\(XX^T\\). Then \\[\\{ \\frac{1}{λ_i} \\; ∀ \\; i \\; \\epsilon \\; \\{1, 2, .., n\\} \\}\\] is the set of eigenvalues of \\((XX^T)^{-1}\\) and its trace thus is the following:\n\\[\\text{tr}((XX^T)^{-1}) = \\sum_{i=1}^{d}\\frac{1}{λ_i}\\]\nNow, we’d like to reduce this value. A way forward would be to increase the eigenvalues of \\(XX^T\\) by doing the following:\n\\[\\text{eigenvalues of } (XX^T + λI) = \\{ λ_i + λ \\; ∀ \\; i \\; \\epsilon \\; \\{1, 2, .., n\\} \\}\\]\nwhich will result in a smaller trace value (due to increase in denominator): \\[\\text{tr}((XX^T + λI)^{-1}) = \\sum_{i=1}^{d}\\frac{1}{λ_i + λ}\\]\nHowever, this process reformulates the problem the estimator is trying to solve (trade-off) to the following:\n\\[\\hat{\\mathbf{w}}_{\\lambda - ML} = (XX^T + λI)^{-1}Xy\\]\nThis induces a non-zero bias in our estimator:\n\\[\n\\begin{alignat}{2}\n&& \\text{Bias}(\\mathbf{\\hat{w}}_{\\lambda-ML})\n& = \\mathbb{E}[\\mathbf{\\hat{w}}_{\\lambda-ML}] - \\mathbf{w}\\\\\n&& & = [(XX^T + λI)^{-1} - (XX^T)^†](XX^T)\\mathbf{w}\n\\end{alignat}\n\\]\nThe difference between the MSE of our estimators is then:\n\\[\n\\begin{alignat}{3}\n&&& \\text{MSE}(\\mathbf{\\hat{w}}) - \\text{MSE}(\\mathbf{\\hat{w}}_{\\lambda-ML})\n&& = \\text{tr}(\\text{Var}(\\mathbf{\\hat{w}})) - \\text{tr}(\\text{Var}(\\mathbf{\\hat{w}}_{\\lambda-ML}))\n& \\quad - \\quad\\text{(A)} \\\\\n&&& && \\quad - || \\text{Bias}(\\mathbf{\\hat{w}}_{\\lambda-ML}) ||^2\n& \\quad - \\quad\\text{(B)} \\\\\n\\end{alignat}\n\\]\nNote that both \\(\\text{(A)}\\) and \\(\\text{(B)}\\) are positive quantities, hence the difference can either be positive or negative; The difference depends on the parameter \\(\\lambda\\).\nThe existence theorem asserts that there exists some non-zero \\(λ\\) such that the MSE of \\(\\hat{\\mathbf{w}}_{\\lambda - ML}\\) is lower than that of \\(\\hat{\\mathbf{w}}_{ML}\\), i.e we get \\(\\text{(A)} &gt; \\text{(B)}\\).",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "Regularization & Validation"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w6_regularization_validation.html#closed-form-solution-for-ridge-estimator",
+    "href": "mlt_taship/w6_regularization_validation.html#closed-form-solution-for-ridge-estimator",
+    "title": "Regularization & Validation",
+    "section": "Closed-Form Solution for Ridge Estimator",
+    "text": "Closed-Form Solution for Ridge Estimator\nIt is the same as the aforementioned \\(\\hat{\\mathbf{w}}_{\\lambda - ML}\\):\n\\[\\hat{\\mathbf{w}}_{\\lambda - ML} = (XX^T + λI)^{-1}Xy\\]\nIt’s good to know that the inverse of \\((XX^T + λI)\\) always exists since: 1. \\((XX^T)\\) is positive semi-definite 2. \\(\\lambda &gt; 0\\)\nHence \\((XX^T + λI)\\) is a positive definite matrix (i.e. all eigenvalues are strictly positive - full rank) - indicating its inverse exists.\n\nl = 10\nw_hat_ridge = np.linalg.inv(X @ X.T + l * np.eye(d)) @ X @ y",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "Regularization & Validation"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w6_regularization_validation.html#solution-for-lasso-regression",
+    "href": "mlt_taship/w6_regularization_validation.html#solution-for-lasso-regression",
+    "title": "Regularization & Validation",
+    "section": "Solution for Lasso Regression",
+    "text": "Solution for Lasso Regression\nThere exists no closed form solution for Lasso, due to the constraint boundaries having points which are not differentiable.\nHence we may use the method of gradient descent, with the help of subgradients to find the Lasso estimator.\nIn this notebook we use scikit-learn’s implementation of Lasso to demonstrate the effect of the Lasso objective on our estimator.\n\nimport warnings\nwarnings.filterwarnings(\"ignore\")\n\nlambdas = np.logspace(-4, 3 , 200)\n\nfrom sklearn.linear_model import Lasso\n\ncoefs = []\nfor l in lambdas:\n  lasso = Lasso(alpha=l, max_iter=int(1e3)).fit(X.T, y)\n  coefs.append(lasso.coef_)\n\nfig, ax = plt.subplots(figsize=(15, 5))\n\nax.plot(lambdas, coefs)\nax.set_xscale(\"log\")\n# ax.set_xlim(ax.get_xlim()[::-1])  # reverse axis\nplt.xlabel(\"λ (log scale)\")\nplt.ylabel(\"weights\")\nplt.title(\"Lasso coefficients w.r.t λ\")\nplt.axis(\"tight\")\nplt.show()",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "Regularization & Validation"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w6_regularization_validation.html#validation",
+    "href": "mlt_taship/w6_regularization_validation.html#validation",
+    "title": "Regularization & Validation",
+    "section": "Validation",
+    "text": "Validation\n\nWe partition our dataset (features and labels) into 2 - the train and validation sets respectively.\nWe construct a set of candidate values for λ and find their corresponding estimators \\(\\hat{\\mathbf{w}}_{\\lambda - ML}\\) using the train dataset.\nWe then use these estimators on the validation dataset and find the MSE.\nWe choose the \\(λ\\) that gives the least MSE.\n\n\ncandidate_lambdas = list(np.logspace(-9, 2, 1000))\n\nX_train, X_val, y_train, y_val = X[:, :int(0.66*n)], X[:, int(0.66*n):], y[:int(0.66*n)], y[int(0.66*n):]\n\ndef validate(X_train, X_val, y_train, y_val, l):\n\n  w_hat_l_ml = np.linalg.pinv(X_train @ X_train.T + l * np.eye(d)) @ X_train @ y_train\n  l_mse = np.linalg.norm(X_val.T @ w_hat_l_ml - y_val)**2 / len(y_val)\n\n  return l_mse\n\nlst = [validate(X_train, X_val, y_train, y_val, l) for l in candidate_lambdas]\n\nfig, ax = plt.subplots(figsize=(15, 5))\n\nax.plot(candidate_lambdas, lst)\nax.set_xscale(\"log\")\n\nbest_lambda, best_loss = min(zip(candidate_lambdas, lst), key=lambda i: i[-1])\nplt.axvline(x=best_lambda, color='red')\n\nplt.xlabel(\"λ (log scale)\")\nplt.ylabel(\"Validation Loss\")\nplt.title(\"Validation\")\nplt.axis(\"tight\");\n\nprint(f'Best Lambda: {best_lambda}')\n\nBest Lambda: 0.0986265846131283",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "Regularization & Validation"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w6_regularization_validation.html#k-fold-cross-validation",
+    "href": "mlt_taship/w6_regularization_validation.html#k-fold-cross-validation",
+    "title": "Regularization & Validation",
+    "section": "K-Fold Cross Validation",
+    "text": "K-Fold Cross Validation\n\nPartition dataset into K sets.\nFor each candidate \\(λ\\):\n\nFor i=1 to K rounds:\n\nChoose the ith partition as the validation set.\nConsider the union of the remaining sets as the train set.\nFollow aforementioned Cross Validation procedure to obtain MSE for chosen \\(λ\\)\n\nReturn the average MSE\n\nChoose the \\(λ\\) that gives the minimum average MSE.\n\n\ncandidate_lambdas = list(np.logspace(-9, 2, 1000))\n\ndef KFold(K, l):\n\n  # Construct Folds\n  folds = []\n  n = X.shape[1]//K\n\n  for i in range(K):\n    folds.append((X[:, i*n:(i+1)*n], y[i*n:(i+1)*n]))\n\n  l_mse = np.array([])\n  # Cross validate over every validation partition\n\n  for i in range(K):\n\n    X_val, y_val = folds[i]\n\n    X_train, y_train = np.array([[] for _ in range(d)]), np.array([])\n\n    for j in range(K):\n      if i != j:\n        X_j, y_j = folds[j]\n        X_train = np.column_stack((X_train, X_j))\n        y_train = np.concatenate((y_train, y_j))\n\n    l_mse = np.append(l_mse, validate(X_train, X_val, y_train, y_val, l))\n\n  return(l_mse.mean())\n\nlst = []\nfor l in candidate_lambdas:\n  a = KFold(10, l)\n  lst.append(a)\n  # print(l, '|', round(a, 10))\n\n\nfig, ax = plt.subplots(figsize=(15, 5))\n\nax.plot(candidate_lambdas, lst)\nax.set_xscale(\"log\")\n\nbest_lambda, best_loss = min(zip(candidate_lambdas, lst), key=lambda i: i[-1])\nplt.axvline(x=best_lambda, color='red')\n\nplt.xlabel(\"λ (log scale)\")\nplt.ylabel(\"K-Fold Loss\")\nplt.title(\"K-Fold CV with K=10\")\nplt.axis(\"tight\");\n\nprint(f'Best Lambda: {best_lambda}')\n\nBest Lambda: 1.0399609139541203e-06",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "Regularization & Validation"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w6_regularization_validation.html#leave-one-out-cross-validation",
+    "href": "mlt_taship/w6_regularization_validation.html#leave-one-out-cross-validation",
+    "title": "Regularization & Validation",
+    "section": "Leave-one-out Cross Validation",
+    "text": "Leave-one-out Cross Validation\n\nJust K-Fold Validation, but with K set to the number of samples in our dataset.\nIn other words, for n rounds, we choose just 1 element as the validation set, and the rest to be our train set.\nIt is a computationally expensive procedure to perform, although it results in a reliable and unbiased estimate of model performance.\n\n\ncandidate_lambdas = list(np.logspace(-9, 2, 1000))\nlst = [KFold(100, l) for l in candidate_lambdas]\n\nfig, ax = plt.subplots(figsize=(15, 5))\n\nax.plot(candidate_lambdas, lst)\nax.set_xscale(\"log\")\n\nbest_lambda, best_loss = min(zip(candidate_lambdas, lst), key=lambda i: i[-1])\nplt.axvline(x=best_lambda, color='red')\n\nplt.xlabel(\"λ (log scale)\")\nplt.ylabel(f\"K-Fold (K={n}) Loss\")\nplt.title(\"LOOCV\")\nplt.axis(\"tight\");\n\nprint(f'Best Lambda: {best_lambda}')\n\nBest Lambda: 5.659170163246243e-07",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "Regularization & Validation"
+    ]
+  },
+  {
+    "objectID": "about.html",
+    "href": "about.html",
+    "title": "Vivek Sivaramakrishnan",
+    "section": "",
+    "text": "Vanakkam 🙏🏼\nI am a final year student in the BS in Data Science and Applications program at the Indian Institute of Technology, Madras. I am broadly interested in the topics of Machine Learning, Reinforcement Learning, and Statistical Modelling."
+  },
+  {
+    "objectID": "about.html#education",
+    "href": "about.html#education",
+    "title": "Vivek Sivaramakrishnan",
+    "section": "Education",
+    "text": "Education\nIndian Institute of Technology, Madras\nBS in Data Science and Applications | Jan 2021 - Present\nSRM Institute of Science and Technology, Kattankulathur\nBSc in Mathematics (Gold Medalist) | Jul 2020 - May 2023"
+  },
+  {
+    "objectID": "about.html#experience",
+    "href": "about.html#experience",
+    "title": "Vivek Sivaramakrishnan",
+    "section": "Experience",
+    "text": "Experience\nML Handbook Project Intern | IITM | Seo 2023 - Dec 2024\nTeaching Assistant - MLT | IITM | May 2023 - Aug 2023"
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Hey! 👋🏼",
+    "section": "",
+    "text": "This is a website that I have currently populated with some projects I’ve worked on since the last year.\nMore details and better context surrounding the projects and will hopefully be added shortly."
+  },
+  {
+    "objectID": "mlt_taship/w3_k_means_validation.html",
+    "href": "mlt_taship/w3_k_means_validation.html",
+    "title": "K-Means & K-Means++",
+    "section": "",
+    "text": "import matplotlib.pyplot as plt\nimport numpy as np\n\nplt.rcParams['figure.dpi'] = 150\nplt.figure(figsize=(5, 4))\n\nN = 200\nnp.random.seed(42)\n\nc1 = np.random.randn(N//3, 2) + np.array([8, 8])\nc2 = np.random.randn(N//3, 2) + np.array([8, -1])\nc3 = np.random.randn(N//3, 2) + np.array([-1, -1])\n\nX = np.concatenate((c1, c2, c3))\nplt.scatter(X[:, 0], X[:, 1], s=10);\nplt.axis('equal')\nplt.show()",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "K-Means & K-Means++"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w3_k_means_validation.html#problem-definition",
+    "href": "mlt_taship/w3_k_means_validation.html#problem-definition",
+    "title": "K-Means & K-Means++",
+    "section": "Problem Definition",
+    "text": "Problem Definition\nIn this context, the objective becomes the following:\n\\[\n\\underset{z \\in S}{\\text{min }} \\sum_{i=1}^{n}||x_i - μ_{z_i}||^2_2\n\\]\nWhere: - \\(x_i\\) denotes the i’th datapoint - \\(z_i\\) denotes the cluster indicator of \\(x_i\\) - \\(μ_{z_i}\\) denotes the mean of the cluster with indicator \\(z_i\\) - \\(S\\) denotes the set of all possible cluster assignments. Note that S is finite\n\ndef obj(X, cluster_centers):\n  return sum([np.min([np.linalg.norm(x_i - cluster_center)**2 for cluster_center in cluster_centers]) for x_i in X])",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "K-Means & K-Means++"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w3_k_means_validation.html#algorithm-strategy",
+    "href": "mlt_taship/w3_k_means_validation.html#algorithm-strategy",
+    "title": "K-Means & K-Means++",
+    "section": "Algorithm Strategy",
+    "text": "Algorithm Strategy\n\nInitialization Step : Assign random datapoints from the dataset as the cluster centers\nCluster Assignment Step : For every datapoint \\(x_i\\), assign a cluster indicator \\(z_i = \\underset{j \\in [1, 2, ..., n]}{\\text{min }} ||x_i - μ_j||^2_2\\)\nRecompute cluster centers : For every cluster indicator \\(j \\in [1, 2, ..., n]\\) recompute \\[μ_j = \\frac{\\sum_{i=1}^{n}x_i \\cdot \\mathbf{1}(z_i=j)}{\\sum_{i=1}^{n} \\mathbf{1}(z_i=j)}\\]\nRepeat steps 2 and 3 until convergence.\n\nConvergence in accordance to the objective is established, since the following can be shown: - The set of all possible cluster assignments \\(S\\) is finite. - The objective function value strictly decreases after every iteration of Lloyd’s.\nThe initialization for K-Means can be done in smarter ways than a random initialization - which improve the chance of lloyd’s converging to a good cluster assignment; with a lesser number of iterations.\nIt is important to note that the final assignment need not necessarily be the best answer (global optima) to the objective function, but it is good enough in practice.",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "K-Means & K-Means++"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w3_k_means_validation.html#initialization-step",
+    "href": "mlt_taship/w3_k_means_validation.html#initialization-step",
+    "title": "K-Means & K-Means++",
+    "section": "Initialization Step",
+    "text": "Initialization Step\nn points from the dataset are randomly chosen as cluster centers, where n is the number of clusters - a hyperparameter\n\nn = 3\n# cluster_centers = X[np.random.choice(len(X), 3)]\ncluster_centers = X[[70, 85, 80]]",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "K-Means & K-Means++"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w3_k_means_validation.html#cluster-assignment-step",
+    "href": "mlt_taship/w3_k_means_validation.html#cluster-assignment-step",
+    "title": "K-Means & K-Means++",
+    "section": "Cluster Assignment Step",
+    "text": "Cluster Assignment Step\nFor every datapoint, the cluster indicator whose center is closest to the datapoint is assigned as its cluster.\n\nfrom scipy.spatial import Voronoi, voronoi_plot_2d\n\ndef cluster_assignment(X, cluster_centers):\n  z = np.zeros(X.shape[0])\n  for i in range(X.shape[0]):\n    z[i] = np.argmin([np.linalg.norm(X[i] - cluster_center) for cluster_center in cluster_centers])\n  return z\n\nz = cluster_assignment(X, cluster_centers)\n\nfig, (ax) = plt.subplots(1, 1)\nfig.set_size_inches(5, 5)\n\nax.scatter(X[:, 0], X[:, 1], c=z, s=10);\nax.scatter(cluster_centers[:, 0], cluster_centers[:, 1], marker = 'x', s = 100, color = 'red', linewidth=1)\n\nvor = Voronoi(cluster_centers)\nvoronoi_plot_2d(vor, ax=ax, show_points=False, show_vertices=False);\n\nax.axis('equal');\n\n\n\n\n\n\n\n\nFor every cluster, there is a corresponding interesction of half-spaces - called Voronoi regions. The K-Means algorithm, equivalently, is trying to find the most optimal Voronoi partition of the space, that minimizes the objective function.",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "K-Means & K-Means++"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w3_k_means_validation.html#recompute-meanscluster-centers",
+    "href": "mlt_taship/w3_k_means_validation.html#recompute-meanscluster-centers",
+    "title": "K-Means & K-Means++",
+    "section": "Recompute Means/Cluster Centers",
+    "text": "Recompute Means/Cluster Centers\nFor every cluster, the cluster center is updated to the mean of the points in the cluster.\n\ndef recompute_clusters(X, z):\n  cluster_centers = np.array([np.mean(X[z == i], axis = 0) for i in range(n)])\n  return cluster_centers",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "K-Means & K-Means++"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w3_k_means_validation.html#generate-a-complex-dataset-with-6-clusters",
+    "href": "mlt_taship/w3_k_means_validation.html#generate-a-complex-dataset-with-6-clusters",
+    "title": "K-Means & K-Means++",
+    "section": "Generate a complex dataset with 6 clusters",
+    "text": "Generate a complex dataset with 6 clusters\nWe make use of the convienient make_blobs data generator from the scikit-learn ibrary.\n\nimport matplotlib.pyplot as plt\nimport numpy as np\nfrom sklearn.datasets import make_blobs\n\ncen = [(-3, 3), (-2, 1), (0, 0), (1, 2), (0, -2), (3, -1)]\nX, ideal_z = make_blobs(n_samples=1000, centers=cen, n_features=2, cluster_std=0.3, random_state=13, center_box=(-3, 3))\nn = len(cen)\n\nfig, ax = plt.subplots()\nax.scatter(X[:, 0], X[:, 1], s=10, c=ideal_z)\nvor = Voronoi(cen)\nvoronoi_plot_2d(vor, ax=ax, show_points=False, show_vertices=False);\nfig.set_size_inches(5, 4.5)\nax.axis([-5, 5, -4, 5])\n\n\n\n\n\n\n\n\n\n# the make_blobs generator returns the optimal/good cluster assignment along with the dataset\n# this function checks whether the result from lloyd's is equivalent to the optimal assignment\n\ndef ideal_check(ideal, obtained):\n  mapping = dict([(i, -1) for i in range(n)])\n\n  for i in range(len(ideal)):\n    if mapping[ideal[i]] == -1:\n      mapping[ideal[i]] = obtained[i]\n    elif mapping[ideal[i]] != obtained[i]:\n      return False\n\n  return True",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "K-Means & K-Means++"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w3_k_means_validation.html#lloyds-algorithm-definition",
+    "href": "mlt_taship/w3_k_means_validation.html#lloyds-algorithm-definition",
+    "title": "K-Means & K-Means++",
+    "section": "Lloyd’s Algorithm Definition",
+    "text": "Lloyd’s Algorithm Definition\n\nfrom IPython.display import HTML\nfrom matplotlib import animation\n\ndef lloyds(cluster_centers, X, z, artists = [], animate=True, fig=None, ax=None, ax1=None, n_iter=0, n = len(cen)):\n  loss = []\n  if fig is None and animate:\n    fig, (ax, ax1) = plt.subplots(1, 2, figsize=(10, 4.15))\n    title = ax.set_title('')\n    artists = []\n\n  if animate:\n      frame = []\n      frame.append(ax.scatter(X[:, 0], X[:, 1], c=z, s=10))\n      frame.append(ax.scatter(cluster_centers[:, 0], cluster_centers[:, 1], marker = 'x', s = 100, color = 'red', linewidth=1))\n      frame.append(ax.text(0.5, 1.05, f'Iteration {n_iter} | Cluster Assignment', transform=ax.transAxes, ha=\"center\"))\n\n      vor = Voronoi(cluster_centers)\n      d = voronoi_plot_2d(vor, ax=ax, show_points=False, show_vertices=False);\n      frame += list(d.axes[0].lines[-1:] + d.axes[0].collections[-2:])\n      ax.axis([-5, 5, -4, 5])\n\n      loss.append(obj(X, cluster_centers))\n      m = 1\n      frame.append(ax1.scatter([0], [loss[0]], color='red', marker='x', s=30))\n      frame.append(ax1.text(0.5, 1.05, 'Objective Function', transform=ax1.transAxes, ha=\"center\"))\n      frame.append(ax1.text(0.5, -0.1, 'Iterations', transform=ax1.transAxes, ha=\"center\"))\n\n      artists.append(frame)\n\n  converged = False\n  while not converged:\n\n    # cluster_centers = recompute_clusters(X, z)\n    for i in range(n):\n      cluster_points = X[z==i]\n      if len(cluster_points)&gt;0:\n        cluster_centers[i] = np.mean(cluster_points, axis=0)\n\n    n_iter += 1\n\n    # Modified cluster assignment step\n    converged = True\n\n    if animate:\n      frame = []\n      frame.append(ax.scatter(X[:, 0], X[:, 1], c=z, s=10))\n      frame.append(ax.scatter(cluster_centers[:, 0], cluster_centers[:, 1], marker = 'x', s = 100, color = 'red', linewidth=1))\n      frame.append(ax.text(0.5, 1.05, f'Iteration {n_iter} | Cluster Recomputation', transform=ax.transAxes, ha=\"center\"))\n\n      vor = Voronoi(cluster_centers)\n      d = voronoi_plot_2d(vor, ax=ax, show_points=False, show_vertices=False);\n      frame += list(d.axes[0].lines[-1:] + d.axes[0].collections[-2:])\n      ax.axis([-5, 5, -4, 5])\n\n      for i in range(0, len(loss)-1, 2):\n        frame.append(list(ax1.plot([i/2, (i+2)/2], [loss[i], loss[i+1]], color='red', marker='x', markersize=5))[0])\n\n      loss.append(obj(X, cluster_centers))\n      frame.append(list(ax1.plot([(len(loss)-2)/2, (len(loss)-1)/2], [loss[-2], loss[-1]], color='red', linestyle=':'))[0])\n      # lines = list(ax1.plot(np.arange(len(loss))/2, loss, color='red', marker='xo', markersize=6))\n      # frame += lines\n      frame.append(ax1.text(0.5, 1.05, 'Objective Function', transform=ax1.transAxes, ha=\"center\"))\n      frame.append(ax1.text(0.5, -0.1, 'Iterations', transform=ax1.transAxes, ha=\"center\"))\n\n      artists.append(frame)\n\n    for i in range(len(X)):\n      z_i = np.argmin([np.linalg.norm(X[i] - cluster_center) for cluster_center in cluster_centers])\n\n      if z_i != z[i]:\n        z[i] = z_i\n        converged = False\n\n    if animate and not converged:\n      frame = []\n      frame.append(ax.scatter(X[:, 0], X[:, 1], c=z, s=10))\n      frame.append(ax.scatter(cluster_centers[:, 0], cluster_centers[:, 1], marker = 'x', s = 100, color = 'red', linewidth=1))\n      frame.append(ax.text(0.5, 1.05, f'Iteration {n_iter} | Cluster Re-assignment', transform=ax.transAxes, ha=\"center\"))\n\n      vor = Voronoi(cluster_centers)\n      d = voronoi_plot_2d(vor, ax=ax, show_points=False, show_vertices=False);\n      frame += list(d.axes[0].lines[-1:] + d.axes[0].collections[-2:])\n      ax.axis([-5, 5, -4, 5])\n\n      loss.append(obj(X, cluster_centers))\n      m = 1\n      for i in range(0, len(loss)-1, 2):\n        frame.append(list(ax1.plot([i/2, (i+2)/2], [loss[i], loss[i+1]], color='red', marker='x', markersize=5))[0])\n\n      frame.append(ax1.text(0.5, 1.05, 'Objective Function', transform=ax1.transAxes, ha=\"center\"))\n      frame.append(ax1.text(0.5, -0.1, 'Iterations', transform=ax1.transAxes, ha=\"center\"))\n\n      artists.append(frame)\n\n  if animate:\n    plt.close()\n    return fig, (ax, ax1), cluster_centers, artists\n  else:\n    return cluster_centers, n_iter",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "K-Means & K-Means++"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w3_k_means_validation.html#random-initialization",
+    "href": "mlt_taship/w3_k_means_validation.html#random-initialization",
+    "title": "K-Means & K-Means++",
+    "section": "Random Initialization",
+    "text": "Random Initialization\nWe now run Lloyd’s algorithm on the dataset with random initialization. We use the ideal_check function to see whether the obtained cluster from lloyd’s is optimal; else we re-run it again.\nAn animation using Matplotlib’s ArtistAnimation is shown to illustrate the working of this strategy.\n\ncluster_centers = X[np.random.choice(len(X), n, replace=False)]\nz = cluster_assignment(X, cluster_centers)\n\nfig, ax, final_clusters, artists = lloyds(cluster_centers, X, z)\n\nwhile not ideal_check(cluster_assignment(X, final_clusters), ideal_z):\n\n  cluster_centers = X[np.random.choice(len(X), n, replace=False)]\n  z = cluster_assignment(X, cluster_centers)\n  fig, ax, final_clusters, artists = lloyds(cluster_centers, X, z)\n\nanim = animation.ArtistAnimation(fig, artists, interval=500, repeat=False, blit=False);\nHTML(anim.to_jshtml())\n\n\n\n\n\n\n\n\n  \n  \n    \n    \n      \n          \n      \n        \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n    \n    \n      \n      Once\n      \n      Loop\n      \n      Reflect\n    \n  \n\n\n\n\n\n\nSome initializations do not give a good clustering\n\ncluster_centers = X[np.random.choice(len(X), n, replace=False)]\nz = cluster_assignment(X, cluster_centers)\nfig, ax, final_clusters, artists = lloyds(cluster_centers, X, z)\n\nwhile ideal_check(cluster_assignment(X, final_clusters), ideal_z):\n  cluster_centers = X[np.random.choice(len(X), n, replace=False)]\n  z = cluster_assignment(X, cluster_centers)\n  fig, ax, final_clusters, artists = lloyds(cluster_centers, X, z)\n\nanim = animation.ArtistAnimation(fig, artists, interval=500, repeat=False, blit=False);\nHTML(anim.to_jshtml())\n\n\n\n\n\n\n\n\n  \n  \n    \n    \n      \n          \n      \n        \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n    \n    \n      \n      Once\n      \n      Loop\n      \n      Reflect",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "K-Means & K-Means++"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w3_k_means_validation.html#experiments",
+    "href": "mlt_taship/w3_k_means_validation.html#experiments",
+    "title": "K-Means & K-Means++",
+    "section": "Experiments",
+    "text": "Experiments\n\nRandom Initialization\n\nfrom timeit import default_timer as timer\n\nnoof_trials = 1000\n\nrandom = {'ideals' : 0,\n          'SSE' : [],\n          'iters' : [],\n          'time' : []}\n\nexp_start = timer()\nfor _ in range(noof_trials):\n\n  start = timer()\n  cluster_centers = X[np.random.choice(len(X), n)]\n  final_clusters, n_iter = lloyds(cluster_centers, X, cluster_assignment(X, cluster_centers), animate=False)\n\n  random['time'].append(timer()-start)\n  random['ideals'] += int(ideal_check(ideal_z, cluster_assignment(X, final_clusters)))\n  random['SSE'].append(obj(X, final_clusters))\n  random['iters'].append(n_iter)\n\nprint(f'Experiment done in {timer()-exp_start:.2f} seconds')\n\nExperiment done in 670.24 seconds\n\n\n\n\nK-Means++ Initialization\n\nkmplusplus = {'ideals' : 0,\n              'SSE' : [],\n              'iters' : [],\n              'time' : []}\n\nexp_start = timer()\nfor _ in range(noof_trials):\n\n  start = timer()\n  cluster_centers = plusplus(animate=False)\n  final_clusters, n_iter = lloyds(cluster_centers, X, cluster_assignment(X, cluster_centers), animate=False)\n\n  kmplusplus['time'].append(timer()-start)\n  kmplusplus['ideals'] += int(ideal_check(ideal_z, cluster_assignment(X, final_clusters)))\n  kmplusplus['SSE'].append(obj(X, final_clusters))\n  kmplusplus['iters'].append(n_iter)\n\nprint(f'Experiment done in {timer()-exp_start:.2f} seconds')\n\nExperiment done in 539.66 seconds",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "K-Means & K-Means++"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w3_k_means_validation.html#results",
+    "href": "mlt_taship/w3_k_means_validation.html#results",
+    "title": "K-Means & K-Means++",
+    "section": "Results",
+    "text": "Results\n\nSSE Comparison\n\nplt.style.use('seaborn-v0_8')\n\nfig = plt.figure(figsize=(12, 5))\nfig.suptitle('Initialization Comparison | SSE')\n\nax1 = plt.subplot(121)\nax1.hist(random['SSE'], bins=30)\nax1.set_title('Random')\nax1.set_ylabel('Frequency')\nax1.set_xlabel('SSE')\n\nax2 = plt.subplot(122, sharex=ax1, sharey=ax1)\nax2.hist(kmplusplus['SSE'], bins=30)\nax2.set_title('K-Means++')\nax2.set_ylabel('Frequency')\nax2.set_xlabel('SSE')\n\nplt.show()\n\n\n\n\n\n\n\n\n\nplt.figure(figsize=(12, 2))\nplt.title('Fraction of Best Convergences')\nplt.barh(['Random', 'K-Means++'], [random['ideals']/noof_trials, kmplusplus['ideals']/noof_trials], height=0.4);\nplt.xlim([0, 1]);\n\n\n\n\n\n\n\n\nThe SSE for the optimal cluster assignment for this particular dataset is around 175. We observe from the above charts that K-Means++ does indeed have a higher chance (0.8) of converging to this as compared to Vanilla K-Means (0.5).\n\n\nNumber of Iterations Comparison\n\nfig = plt.figure(figsize=(12, 5))\nfig.suptitle('Initialization Comparison | Number of Iterations')\n\nax1 = plt.subplot(121)\nax1.hist(random['iters'], bins=max(random['iters'])-min(random['iters']))\nax1.set_title('Random')\nax1.set_ylabel('Frequency')\nax1.set_xlabel('Number of Iterations')\n\nax2 = plt.subplot(122, sharex=ax1, sharey=ax1)\nax2.hist(kmplusplus['iters'], bins=max(kmplusplus['iters'])-min(kmplusplus['iters']))\nax2.set_title('K-Means++')\nax2.set_ylabel('Frequency')\nax2.set_xlabel('Number of Iterations')\n\nplt.show()\n\n\n\n\n\n\n\n\nFor Vanilla K-Means, we observe that the number of iterations has quite a bit of variation, with an average of 8.75 iterations to convergence.\nK-Means++ has a relatively smaller spread, with an average of 4.2 iterations to convergence (post intialization).\n\n\nTime Taken Comparison\n\nfig = plt.figure(figsize=(12, 5))\nfig.suptitle('Initialization Comparison | Time taken to converge')\n\nax1 = plt.subplot(121)\nax1.hist(random['time'], bins=20)\nax1.set_title('Random')\nax1.set_ylabel('Frequency')\nax1.set_xlabel('Time taken')\n\nax2 = plt.subplot(122, sharex=ax1, sharey=ax1)\nax2.hist(kmplusplus['time'], bins=20)\nax2.set_title('K-Means++')\nax2.set_ylabel('Frequency')\nax2.set_xlabel('Time taken (s)')\n\nplt.show()\n\n\n\n\n\n\n\n\n\nnp.array(kmplusplus['time']).mean()\n\n0.4248704458820016\n\n\nSimilar to the results for number of iterations, the time taken till convergence also has a wide spread for Random Initialization, with an average of 0.55s. K-Means++ has an average of 0.42s.",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "K-Means & K-Means++"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w3_k_means_validation.html#k-means",
+    "href": "mlt_taship/w3_k_means_validation.html#k-means",
+    "title": "K-Means & K-Means++",
+    "section": "K-Means",
+    "text": "K-Means\nK-Means with k = 3 for $ X = [-15, -10, 0, 5, 15, 20, 25] $ with mean clusters \\(μ = [-15, 0, 5]\\)\n\nplt.figure(figsize=(15, 7.5))\n# From the problem\nx = np.expand_dims(np.array([-15, -10, 0, 5, 15, 20, 25]), axis=1)\nclusters = np.expand_dims(np.array([-15, 0, 5]), axis=1)\nplt.subplot(2, 3, 1)\nplt.scatter(x[:,0], np.zeros(x.shape[0]));\nplt.scatter(clusters[:, 0], np.zeros(3), marker = 'x', s = 100, color = 'red', linewidth=1);\nplt.title('From the problem')\n\n# Initial Cluster Assignment\nz = cluster_assignment(x, clusters)\nplt.subplot(2, 3, 2)\nplt.scatter(x[:,0], np.zeros(x.shape[0]), c=z);\nplt.scatter(clusters[:, 0], np.zeros(3), marker = 'x', s = 100, color = 'red', linewidth=1);\nplt.title('Initial Cluster Assignment')\n\n# Recompute Cluster Centers\nclusters = recompute_clusters(x, z)\nplt.subplot(2, 3, 3)\nplt.scatter(x[:,0], np.zeros(x.shape[0]), c=z);\nplt.scatter(clusters[:, 0], np.zeros(3), marker = 'x', s = 100, color = 'red', linewidth=1);\nplt.title('Recompute Cluster Centers')\n\n# Next Cluster Assignment\nz = cluster_assignment(x, clusters)\nplt.subplot(2, 3, 4)\nplt.scatter(x[:,0], np.zeros(x.shape[0]), c=z);\nplt.scatter(clusters[:, 0], np.zeros(3), marker = 'x', s = 100, color = 'red', linewidth=1);\nplt.title('Next Cluster Assignment')\n\n# Again Recompute Cluster Centers\nclusters = recompute_clusters(x, z)\nplt.subplot(2, 3, 5)\nplt.scatter(x[:,0], np.zeros(x.shape[0]), c=z);\nplt.scatter(clusters[:, 0], np.zeros(3), marker = 'x', s = 100, color = 'red', linewidth=1);\nplt.title('Again Recompute Cluster Centers')\n\n# Cluster Assignment - No Change\n# Algorithm has converged\nz = cluster_assignment(x, clusters)\nplt.subplot(2, 3, 6)\nplt.scatter(x[:,0], np.zeros(x.shape[0]), c=z);\nplt.scatter(clusters[:, 0], np.zeros(3), marker = 'x', s = 100, color = 'red', linewidth=1);\nplt.title('Algorithm has converged');",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "K-Means & K-Means++"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w3_k_means_validation.html#k-means-1",
+    "href": "mlt_taship/w3_k_means_validation.html#k-means-1",
+    "title": "K-Means & K-Means++",
+    "section": "K-Means++",
+    "text": "K-Means++\nFor the dataset below, k-means++ algorithm is run with \\(k=2\\). Find the probability that \\(\\mathbf{x}_2, \\mathbf{x}_1\\) are chosen as the initial clusters, in that order.\n\\[\\left\\{\\mathbf{x_{1}} \\ =\\ \\begin{bmatrix}\n0\\\\\n2\n\\end{bmatrix} ,\\mathbf{\\ x_{2}} \\ =\\ \\begin{bmatrix}\n2\\\\\n0\n\\end{bmatrix} ,\\ \\mathbf{x_{3}} \\ =\\ \\begin{bmatrix}\n0\\\\\n0\n\\end{bmatrix} ,\\ \\mathbf{x_{4}} \\ =\\ \\begin{bmatrix}\n0\\\\\n-2\n\\end{bmatrix} ,\\ \\mathbf{x_{5}} \\ =\\ \\begin{bmatrix}\n-2\\\\\n0\n\\end{bmatrix}\\right\\}\\]\n\ndataset = np.array([[0, 2], [2, 0], [0, 0], [0, -2], [-2, 0]])\nprobabilities = np.array([1/len(dataset) for _ in range(len(dataset))])\nprint('Initial Probablities:', probabilities)\nclusters = []\nanswer = 1\n\n# First we select x2 = [2,0]\nclusters.append(dataset[1])\nanswer *= probabilities[1]\n\n# Rescore based on selected clusters\nscores = np.array([min([np.linalg.norm(datapoint-cluster)**2 for cluster in clusters]) for datapoint in dataset])\n\n# Normalize scores to probability\nprobabilities = scores/scores.sum()\nprint('Probabilities after selecting x2: ', [round(i, 3) for i in probabilities])\n\n# Now we select x1 = [0,2]\nclusters.append(dataset[0])\nanswer *= probabilities[0]\n\nprint('Probability of selecting [x2 x1]:', round(answer, 3))\n\nInitial Probablities: [0.2 0.2 0.2 0.2 0.2]\nProbabilities after selecting x2:  [0.222, 0.0, 0.111, 0.222, 0.444]\nProbability of selecting [x2 x1]: 0.044",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "K-Means & K-Means++"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w9_perceptron_lr.html",
+    "href": "mlt_taship/w9_perceptron_lr.html",
+    "title": "The Perceptron & Logistic Regression",
+    "section": "",
+    "text": "We create a Linearly seperable dataset with γ margin\n\nimport numpy as np\nimport matplotlib.pyplot as plt\n\nd = 8\nplt.rcParams.update({\n    'figure.figsize': (7, 7),\n    'scatter.marker': 'x'\n})\n\nnp.random.seed(1)\n\nX_ = np.random.rand(100, 2)\nX_ = (X_-np.mean(X_))*10\n\nX, y = [], []\n\nperp = lambda i: -1*i[0]/i[1]\nsign = lambda i: 2*int(i &gt;= 0)-1\n\nw = np.array([1, 1])/np.sqrt(2)\ngamma = 0.5\n\nfor p in X_:\n  d = w@p.T\n  if abs(d) &gt;= gamma:\n    X.append(p)\n    y.append(sign(d))\n\nX = np.array(X)\ny = np.array(y)\nn = X.shape[0]\n\nfig, (ax1, ax2) = plt.subplots(1, 2)\nfig.set_size_inches(16, 7)\nfig.suptitle(f'A Linearly seperable dataset with γ={gamma} margin')\n\nax1.scatter(X[:, 0][y==1], X[:, 1][y==1], color='green', label='Positive')\nax1.scatter(X[:, 0][y!=1], X[:, 1][y!=1], color='red', label='Negative')\n\nax2.scatter(X[:, 0][y==1], X[:, 1][y==1], color='green', label='Positive')\nax2.scatter(X[:, 0][y!=1], X[:, 1][y!=1], color='red', label='Negative')\nax2.legend(loc='lower right')\n\nax2.axvline(x=0, c='black')\nax2.axhline(y=0, c='black')\n\nax2.arrow(0, 0, w[0], w[1], length_includes_head=True, head_width=0.1)\nax2.axline([0, 0], slope=perp(w), c='black')\nax2.axline(w*gamma, slope=perp(w), c='black', linestyle=\"--\")\nax2.axline(w*-1*gamma, slope=perp(w), c='black', linestyle=\"--\")\n\nplt.show()\n\n\n\n\n\n\n\n\n\nmax([np.linalg.norm(i) for i in X_])**2/0.25\n\n170.99461095236117",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "The Perceptron & Logistic Regression"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w9_perceptron_lr.html#dataset-generation",
+    "href": "mlt_taship/w9_perceptron_lr.html#dataset-generation",
+    "title": "The Perceptron & Logistic Regression",
+    "section": "",
+    "text": "We create a Linearly seperable dataset with γ margin\n\nimport numpy as np\nimport matplotlib.pyplot as plt\n\nd = 8\nplt.rcParams.update({\n    'figure.figsize': (7, 7),\n    'scatter.marker': 'x'\n})\n\nnp.random.seed(1)\n\nX_ = np.random.rand(100, 2)\nX_ = (X_-np.mean(X_))*10\n\nX, y = [], []\n\nperp = lambda i: -1*i[0]/i[1]\nsign = lambda i: 2*int(i &gt;= 0)-1\n\nw = np.array([1, 1])/np.sqrt(2)\ngamma = 0.5\n\nfor p in X_:\n  d = w@p.T\n  if abs(d) &gt;= gamma:\n    X.append(p)\n    y.append(sign(d))\n\nX = np.array(X)\ny = np.array(y)\nn = X.shape[0]\n\nfig, (ax1, ax2) = plt.subplots(1, 2)\nfig.set_size_inches(16, 7)\nfig.suptitle(f'A Linearly seperable dataset with γ={gamma} margin')\n\nax1.scatter(X[:, 0][y==1], X[:, 1][y==1], color='green', label='Positive')\nax1.scatter(X[:, 0][y!=1], X[:, 1][y!=1], color='red', label='Negative')\n\nax2.scatter(X[:, 0][y==1], X[:, 1][y==1], color='green', label='Positive')\nax2.scatter(X[:, 0][y!=1], X[:, 1][y!=1], color='red', label='Negative')\nax2.legend(loc='lower right')\n\nax2.axvline(x=0, c='black')\nax2.axhline(y=0, c='black')\n\nax2.arrow(0, 0, w[0], w[1], length_includes_head=True, head_width=0.1)\nax2.axline([0, 0], slope=perp(w), c='black')\nax2.axline(w*gamma, slope=perp(w), c='black', linestyle=\"--\")\nax2.axline(w*-1*gamma, slope=perp(w), c='black', linestyle=\"--\")\n\nplt.show()\n\n\n\n\n\n\n\n\n\nmax([np.linalg.norm(i) for i in X_])**2/0.25\n\n170.99461095236117",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "The Perceptron & Logistic Regression"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w9_perceptron_lr.html#perceptron-algorithm",
+    "href": "mlt_taship/w9_perceptron_lr.html#perceptron-algorithm",
+    "title": "The Perceptron & Logistic Regression",
+    "section": "Perceptron Algorithm:",
+    "text": "Perceptron Algorithm:\n\n\\(\\mathbf{w}^0 = 0\\)\nIn step t, if \\(∃\\) some \\(\\mathbf{x}_i \\ni \\text{sign}(\\mathbf{w}^{t}\\mathbf{x}_i^T) != y_i\\) (misclassified):\n\nUpdate \\(\\mathbf{w}^{t+1} = \\mathbf{w}^{t} + \\mathbf{x}_iy_i\\)\n\nElse, stop (converged).\n\n\nfrom IPython.display import HTML, Markdown, display\n\nfrom matplotlib import animation\n\n# Initialize w to zero\nw = np.array([0, 0])\n\nfig, (ax, ax1) = plt.subplots(1, 2, figsize=(16*2/3, 7*2/3), dpi=150)\n\nartists = []\nframe = []\n\nconverged = False\nn_iter = 0\n\nwhile not converged and n_iter&lt;=10:\n  frame1 = []\n\n  y_pred = np.array(list(map(sign, w@X.T)))\n  true_negatives = np.logical_and(y_pred==-1, y==-1)\n  true_positives = np.logical_and(y_pred==1, y==1)\n  mistakes = np.logical_or(np.logical_and(y_pred==1, y==-1), np.logical_and(y_pred==-1, y==1))\n\n  frame1.append(ax1.text(0.5, 1.05, f'({n_iter}) Check - w = [{w[0]:.2f} {w[1]:.2f}]', transform=ax1.transAxes, ha=\"center\"))\n\n  if np.linalg.norm(w):\n    frame1.append(ax1.axline([0, 0], slope=perp(w), c='black'))\n    frame1.append(ax1.scatter(X[:, 0][true_positives], X[:, 1][true_positives], color='green'))\n    frame1.append(ax1.scatter(X[:, 0][true_negatives], X[:, 1][true_negatives], color='red'))\n    frame1.append(ax1.scatter(X[:, 0][mistakes], X[:, 1][mistakes], color='blue'))\n\n  else:\n    frame1.append(ax1.scatter(X[:, 0][true_positives], X[:, 1][true_positives], color='green', label='Positive'))\n    frame1.append(ax1.scatter(X[:, 0][true_negatives], X[:, 1][true_negatives], color='red', label='Negative'))\n    frame1.append(ax1.scatter(X[:, 0][mistakes], X[:, 1][mistakes], color='blue', label='Mistakes'))\n    frame1.append(ax.scatter([], [], color='cornflowerblue', s=[50], label='Update; False Negative'))\n    frame1.append(ax.scatter([], [], color='lightcoral', s=[50], label='Update; False Positive'))\n    ax1.legend(loc='lower right')\n    ax.legend(loc='lower right')\n\n  frame1.append(ax1.axvline(x=0, c='black'))\n  frame1.append(ax1.axhline(y=0, c='black'))\n\n  frame1.append(ax1.arrow(0, 0, w[0], w[1], length_includes_head=True, head_width=0.1))\n  artists.append(frame1+frame)\n\n  n_iter += 1\n\n  for i in range(n):\n\n    if sign(w@X[i].T) != y[i]: # if mistake\n\n      frame = []\n      frame.append(ax.text(0.5, 1.05, f'({n_iter}) Arbitrary mistake on [{X[i][0]:.2f} {X[i][1]:.2f}] ' + ['(False Positive)', '(False Negative)'][int(y[i]==1)], transform=ax.transAxes, ha=\"center\"))\n      frame.append(ax.axvline(x=0, c='black'))\n      frame.append(ax.axhline(y=0, c='black'))\n      frame.append(ax.arrow(0, 0, w[0], w[1], length_includes_head=True, head_width=0.1))\n      if y[i] == 1:\n        frame.append(ax.scatter([X[i][0]], [X[i][1]], color='cornflowerblue', s=[50]))\n      else:\n        frame.append(ax.scatter([X[i][0]], [X[i][1]], color='lightcoral', s=[50]))\n      if np.linalg.norm(w):\n        frame.append(ax.axline([0, 0], slope=perp(w), c='black'))\n      artists.append(frame+frame1)\n\n      frame = []\n      frame.append(ax.text(0.5, 1.05, f'({n_iter}) Update - w = [{w[0]:.2f} {w[1]:.2f}] + ({y[i]}) * [{X[i][0]:.2f} {X[i][1]:.2f}]', transform=ax.transAxes, ha=\"center\"))\n      frame.append(ax.axvline(x=0, c='black'))\n      frame.append(ax.axhline(y=0, c='black'))\n      frame.append(ax.arrow(0, 0, w[0], w[1], length_includes_head=True, head_width=0.1))\n      if y[i] == 1:\n        frame.append(ax.arrow(w[0], w[1], y[i]*X[i][0], y[i]*X[i][1], length_includes_head=True, head_width=0.1, color='cornflowerblue'))\n        frame.append(ax.arrow(0, 0, y[i]*X[i][0], y[i]*X[i][1], length_includes_head=True, head_width=0.1, color='cornflowerblue', linestyle='--'))\n        frame.append(ax.scatter([X[i][0]], [X[i][1]], color='cornflowerblue', s=[50]))\n      else:\n        frame.append(ax.arrow(w[0], w[1], y[i]*X[i][0], y[i]*X[i][1], length_includes_head=True, head_width=0.1, color='lightcoral'))\n        frame.append(ax.arrow(0, 0, y[i]*X[i][0], y[i]*X[i][1], length_includes_head=True, head_width=0.1, color='lightcoral', linestyle='--'))\n        frame.append(ax.scatter([X[i][0]], [X[i][1]], color='lightcoral', s=[50]))\n      if np.linalg.norm(w):\n        frame.append(ax.axline([0, 0], slope=perp(w), c='black'))\n      artists.append(frame+frame1)\n\n      # update w\n      w = w + X[i]*y[i]\n\n      frame = []\n      frame.append(ax.text(0.5, 1.05, f'({n_iter}) Updated w = [{w[0]:.2f} {w[1]:.2f}]', transform=ax.transAxes, ha=\"center\"))\n      frame.append(ax.axvline(x=0, c='black'))\n      frame.append(ax.axhline(y=0, c='black'))\n      frame.append(ax.arrow(0, 0, w[0], w[1], length_includes_head=True, head_width=0.1))\n      if y[i] == 1:\n        frame.append(ax.scatter([X[i][0]], [X[i][1]], color='cornflowerblue', s=[50]))\n      else:\n        frame.append(ax.scatter([X[i][0]], [X[i][1]], color='lightcoral', s=[50]))\n      if np.linalg.norm(w):\n        frame.append(ax.axline([0, 0], slope=perp(w), c='black'))\n      artists.append(frame+frame1)\n\n      break\n  else:\n    # if no mistakes, perceptron has converged\n    converged = True\n\nplt.close()\n\nanim = animation.ArtistAnimation(fig, artists, interval=500, repeat=False, blit=False);\ndisplay(HTML(anim.to_jshtml()))\n\nMarkdown(r\"Perceptron converges to $$\\mathbf{w} =\\begin{pmatrix}%.2f\\\\%.2f\\end{pmatrix}$$ after %i updates.\"%(w[0], w[1], n_iter))\n\nOutput hidden; open in https://colab.research.google.com to view.",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "The Perceptron & Logistic Regression"
+    ]
+  },
+  {
+    "objectID": "mlt_taship/w9_perceptron_lr.html#logistic-regression",
+    "href": "mlt_taship/w9_perceptron_lr.html#logistic-regression",
+    "title": "The Perceptron & Logistic Regression",
+    "section": "Logistic Regression",
+    "text": "Logistic Regression\nWe consider our prediction probabilty to be proportional to the distance of a point from the decision boundary. With this formulation, we use MLE to learn the best decision boundary for a given dataset.\n\\[\nP(y=1|\\mathbf{x}) = σ(\\mathbf{w}^T\\mathbf{x}) = \\frac{1}{1+e^{-\\mathbf{w}^T\\mathbf{x}}}\n\\]\n\nw = np.array([1, 1])/np.sqrt(2)\ny = np.array([int(w@x.T &gt;= 0) for x in X])\n\nsigmoid = lambda w, x: 1/(1+np.exp(-1*w@x.T))\ny_proba = np.array([sigmoid(w, x) for x in X])\n\nplt.scatter(X[:, 0], X[:, 1], c=y_proba, cmap='bwr')\nplt.arrow(0, 0, w[0], w[1], length_includes_head=True, head_width=0.1)\nplt.axline([0, 0], slope=perp(w), c='black')\n\nplt.axvline(x=0, c='black')\nplt.axhline(y=0, c='black')\n\nplt.show()\n\n\n\n\n\n\n\n\nGoal: Minimize error (Negative Log-Likelihood) function below \\[\n\\min_{\\mathbf{w}} -\\ln L(\\mathbf{w}) =\\min_{\\mathbf{w}} -\\sum_{i=1}^{n} y_i \\ln (σ(\\mathbf{w}^T\\mathbf{x})) + (1-y_i) \\ln (1-σ(\\mathbf{w}^T\\mathbf{x}))\n\\]\nThe gradient of the log-lokelihood is given as follows:\n\\[\n\\nabla \\ln L(\\mathbf{w}) = \\sum_{i=1}^{n} \\left(σ(\\mathbf{w}^T\\mathbf{x})- y_i \\right) \\mathbf{x}_i\n\\]\nWe perform gradient descent (till convergence) as follows: \\[\n\\mathbf{w}^{t+1} = \\mathbf{w}^t - \\eta \\nabla \\log L(\\mathbf{w}^t)\n\\]\n\nw = np.array([0, 0])\nstep = 0.001\n\ndef grad(w):\n  y_proba = np.array([sigmoid(w, x) for x in X])\n  return X.T@(y_proba-y)\n\ndef error(w):\n  l = 0\n  for i in range(n):\n    l += y[i]*np.log(sigmoid(w, X[i])) + (1-y[i])*np.log(1-sigmoid(w, X[i]))\n  return -l\n\nw_next = w - grad(w) * step\n\nn_iter = 0\nresults = r\"Iteration Number $i$ | $\\mathbf{w}$ | Error\"+\"\\n--|--|--\\n\"\n\nwhile np.linalg.norm(w-w_next)&gt;0.001 and n_iter&lt;41:\n\n  if not n_iter%10 or n_iter &lt;= 3:\n    results += str(n_iter)+r\" | $$\\begin{pmatrix}{\" + str(round(w[0], 2)) + \",\\quad}{\" + str(round(w[0], 2)) + r\"}\\end{pmatrix}$$ | \" + f\"{error(w):.2f}\\n\"\n\n  w = w_next\n  y_proba = np.array([sigmoid(w, x) for x in X])\n  grad_step = grad(w_next) * step\n\n  w_next = w_next - grad_step\n  n_iter+=1\n\nMarkdown(results)\n\n\n\n\nIteration Number \\(i\\)\n\\(\\mathbf{w}\\)\nError\n\n\n\n\n0\n\\[\\begin{pmatrix}{0,\\quad}{0}\\end{pmatrix}\\]\n59.61\n\n\n1\n\\[\\begin{pmatrix}{0.09,\\quad}{0.09}\\end{pmatrix}\\]\n44.56\n\n\n2\n\\[\\begin{pmatrix}{0.16,\\quad}{0.16}\\end{pmatrix}\\]\n35.93\n\n\n3\n\\[\\begin{pmatrix}{0.21,\\quad}{0.21}\\end{pmatrix}\\]\n30.52\n\n\n10\n\\[\\begin{pmatrix}{0.42,\\quad}{0.42}\\end{pmatrix}\\]\n17.04\n\n\n20\n\\[\\begin{pmatrix}{0.57,\\quad}{0.57}\\end{pmatrix}\\]\n11.83\n\n\n30\n\\[\\begin{pmatrix}{0.67,\\quad}{0.67}\\end{pmatrix}\\]\n9.49\n\n\n40\n\\[\\begin{pmatrix}{0.74,\\quad}{0.74}\\end{pmatrix}\\]\n8.09\n\n\n\n\n\nIt’s worth noting that Logistic Regression can exhibit severe over-fitting on datasets that are linearly seperable. This happens since \\(\\mathbf{w}\\) can be made arbitrarily large along this direction to minimize error. This phenomenon can be observed above, since the dataset in question is linearly seperable.\n\nperceptron_w = np.array([7.06, 10.34])\nerror(perceptron_w/3)\n\n# Scaling along this direction also yields -inf error\n\n1.3071990315434519\n\n\nOne can get away with this singularity by introducing a regularization term (quantity that grows proportional to \\(||\\mathbf{w}||\\)) into the error function.\nWe illustrate this in our example again, using the following modified loss and gradient functions:\n\\[\n\\begin{aligned}\n\\min_{\\mathbf{w}} -\\ln L(\\mathbf{w}) &= \\min_{\\mathbf{w}} -\\sum_{i=1}^{n} y_i \\ln (σ(\\mathbf{w}^T\\mathbf{x})) + (1-y_i) \\ln (1-σ(\\mathbf{w}^T\\mathbf{x})) + \\frac{λ}{2}||\\mathbf{w}||^2_2 \\\\\n\\nabla \\ln L(\\mathbf{w}) &= \\sum_{i=1}^{n} \\left(σ(\\mathbf{w}^T\\mathbf{x})- y_i \\right) \\mathbf{x}_i + \\lambda \\mathbf{w}\n\\end{aligned}\n\\]\n\nw = np.array([0, 0])\nstep = 0.001\nlmda = 200\n\ndef reg_grad(w):\n  y_proba = np.array([sigmoid(w, x) for x in X])\n  return X.T@(y_proba-y) + lmda*w\n\ndef reg_error(w):\n  l = 0\n  for i in range(n):\n    l += y[i]*np.log(sigmoid(w, X[i])) + (1-y[i])*np.log(1-sigmoid(w, X[i]))\n  return -l + (lmda/2)*w@w.T\n\nw_next = w - reg_grad(w) * step\n\nn_iter = 0\nresults = r\"Iteration Number $i$ | $\\mathbf{w}$ | Regularized Error\"+\"\\n--|--|--\\n\"\n\nwhile np.linalg.norm(w-w_next)&gt;0.001 and n_iter&lt;101:\n\n  if not n_iter%10 or n_iter &lt;= 3:\n    results += str(n_iter)+r\" | $$\\begin{pmatrix}{\" + str(round(w[0], 2)) + \",\\quad}{\" + str(round(w[0], 2)) + r\"}\\end{pmatrix}$$ | \" + f\"{reg_error(w):.2f}\\n\"\n\n  w = w_next\n  y_proba = np.array([sigmoid(w, x) for x in X])\n  reg_grad_step = reg_grad(w_next) * step\n\n  w_next = w_next - reg_grad_step\n  n_iter+=1\nelse:\n  results += str(n_iter)+r\" | $$\\begin{pmatrix}{\" + str(round(w[0], 2)) + \",\\quad}{\" + str(round(w[0], 2)) + r\"}\\end{pmatrix}$$ | \" + f\"{reg_error(w):.2f}\\n\"\n\nMarkdown(results)\n\n\n\n\nIteration Number \\(i\\)\n\\(\\mathbf{w}\\)\nRegularized Error\n\n\n\n\n0\n\\[\\begin{pmatrix}{0,\\quad}{0}\\end{pmatrix}\\]\n59.61\n\n\n1\n\\[\\begin{pmatrix}{0.09,\\quad}{0.09}\\end{pmatrix}\\]\n46.28\n\n\n2\n\\[\\begin{pmatrix}{0.14,\\quad}{0.14}\\end{pmatrix}\\]\n42.17\n\n\n3\n\\[\\begin{pmatrix}{0.17,\\quad}{0.17}\\end{pmatrix}\\]\n40.77\n\n\n10\n\\[\\begin{pmatrix}{0.21,\\quad}{0.21}\\end{pmatrix}\\]\n39.94",
+    "crumbs": [
+      "Home",
+      "MLT TAship",
+      "The Perceptron & Logistic Regression"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/em.html",
+    "href": "ml_handbook/em.html",
+    "title": "Intro to EM",
+    "section": "",
+    "text": "Nuanced situations end up providing complicated situations. One way of handling this is to view it as a mixture of simpler distributions - where the methodology of mixing is governed by the introduction of latent variables.\nThe problem can be then modelled into a Maximum Likelihood Estimation problem; but obtaining the parameters that best fit the data is not a straightforward task (no closed form solutions) (singularity problems)\nA general technique for finding maximum likelihood estimators in latent variable models is the expectation-maximization (EM) algorithm:\n\nE-step (expectation): Use parameter estimates to update latent variable values.\nM-step (maximization): Obtain new parameter estimates by maximizing the log-likelihood function based on the latent variables obtained from E-step\n\nWe illustrate the workings of the EM Algorithm on the Old-Faithful dataset by posing it as a 2-component gaussian mixture model.\n\n!wget https://raw.githubusercontent.com/data-8/materials-su19/master/materials/su19/hw/hw02/old_faithful.csv\n\nimport matplotlib.pyplot as plt\nimport numpy as np\nfrom sklearn.datasets import make_blobs\nfrom scipy.stats import multivariate_normal\nimport pandas as pd\nfrom matplotlib import mlab\nfrom sklearn.preprocessing import MinMaxScaler\n\nplt.rcParams['figure.figsize'] = (8, 8)\n\nX = pd.read_csv('old_faithful.csv')[['eruptions', 'waiting']].to_numpy()\nX = MinMaxScaler().fit_transform(X)\nplt.scatter(X[:, 0], X[:, 1])\n\n# M, N = np.mgrid[min(X[:, 0]):max(X[:, 0]):0.01, min(X[:, 1]):max(X[:, 1]):0.01]\nM, N = np.mgrid[0:1:0.01, 0:1:0.01]\ngrid = np.dstack((M, N))\n\n--2023-11-18 18:46:43--  https://raw.githubusercontent.com/data-8/materials-su19/master/materials/su19/hw/hw02/old_faithful.csv\nResolving raw.githubusercontent.com (raw.githubusercontent.com)... 185.199.108.133, 185.199.109.133, 185.199.110.133, ...\nConnecting to raw.githubusercontent.com (raw.githubusercontent.com)|185.199.108.133|:443... connected.\nHTTP request sent, awaiting response... 200 OK\nLength: 2270 (2.2K) [text/plain]\nSaving to: ‘old_faithful.csv.13’\n\nold_faithful.csv.13   0%[                    ]       0  --.-KB/s               old_faithful.csv.13 100%[===================&gt;]   2.22K  --.-KB/s    in 0s      \n\n2023-11-18 18:46:43 (23.1 MB/s) - ‘old_faithful.csv.13’ saved [2270/2270]\n\n\n\n\n\n\n\n\n\n\nOur problem is to estimate the parameters of the following K-component gaussian mixture pdf:\n\\[\np(\\mathbf{x}) =  \\sum_{k=1}^{K} \\pi_k \\mathcal{N}(\\mathbf{x} | \\mathbf{\\mu}_k, \\mathbf{Σ}_k)\n\\]\nWhere: - $_k = $ Probability that a random point belongs to the kth component (also called mixing coefficients) (\\(\\sum{\\pi_k} = 1\\)) - \\(\\mu_k, Σ_k\\) and \\(\\mathcal{N}(\\mathbf{x} | \\mathbf{\\mu}_k, \\mathbf{Σ}_k)\\) are the parameters and pdf of the kth components respectively.",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Intro to EM"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/em.html#what-is-the-em-algorithm",
+    "href": "ml_handbook/em.html#what-is-the-em-algorithm",
+    "title": "Intro to EM",
+    "section": "",
+    "text": "Nuanced situations end up providing complicated situations. One way of handling this is to view it as a mixture of simpler distributions - where the methodology of mixing is governed by the introduction of latent variables.\nThe problem can be then modelled into a Maximum Likelihood Estimation problem; but obtaining the parameters that best fit the data is not a straightforward task (no closed form solutions) (singularity problems)\nA general technique for finding maximum likelihood estimators in latent variable models is the expectation-maximization (EM) algorithm:\n\nE-step (expectation): Use parameter estimates to update latent variable values.\nM-step (maximization): Obtain new parameter estimates by maximizing the log-likelihood function based on the latent variables obtained from E-step\n\nWe illustrate the workings of the EM Algorithm on the Old-Faithful dataset by posing it as a 2-component gaussian mixture model.\n\n!wget https://raw.githubusercontent.com/data-8/materials-su19/master/materials/su19/hw/hw02/old_faithful.csv\n\nimport matplotlib.pyplot as plt\nimport numpy as np\nfrom sklearn.datasets import make_blobs\nfrom scipy.stats import multivariate_normal\nimport pandas as pd\nfrom matplotlib import mlab\nfrom sklearn.preprocessing import MinMaxScaler\n\nplt.rcParams['figure.figsize'] = (8, 8)\n\nX = pd.read_csv('old_faithful.csv')[['eruptions', 'waiting']].to_numpy()\nX = MinMaxScaler().fit_transform(X)\nplt.scatter(X[:, 0], X[:, 1])\n\n# M, N = np.mgrid[min(X[:, 0]):max(X[:, 0]):0.01, min(X[:, 1]):max(X[:, 1]):0.01]\nM, N = np.mgrid[0:1:0.01, 0:1:0.01]\ngrid = np.dstack((M, N))\n\n--2023-11-18 18:46:43--  https://raw.githubusercontent.com/data-8/materials-su19/master/materials/su19/hw/hw02/old_faithful.csv\nResolving raw.githubusercontent.com (raw.githubusercontent.com)... 185.199.108.133, 185.199.109.133, 185.199.110.133, ...\nConnecting to raw.githubusercontent.com (raw.githubusercontent.com)|185.199.108.133|:443... connected.\nHTTP request sent, awaiting response... 200 OK\nLength: 2270 (2.2K) [text/plain]\nSaving to: ‘old_faithful.csv.13’\n\nold_faithful.csv.13   0%[                    ]       0  --.-KB/s               old_faithful.csv.13 100%[===================&gt;]   2.22K  --.-KB/s    in 0s      \n\n2023-11-18 18:46:43 (23.1 MB/s) - ‘old_faithful.csv.13’ saved [2270/2270]\n\n\n\n\n\n\n\n\n\n\nOur problem is to estimate the parameters of the following K-component gaussian mixture pdf:\n\\[\np(\\mathbf{x}) =  \\sum_{k=1}^{K} \\pi_k \\mathcal{N}(\\mathbf{x} | \\mathbf{\\mu}_k, \\mathbf{Σ}_k)\n\\]\nWhere: - $_k = $ Probability that a random point belongs to the kth component (also called mixing coefficients) (\\(\\sum{\\pi_k} = 1\\)) - \\(\\mu_k, Σ_k\\) and \\(\\mathcal{N}(\\mathbf{x} | \\mathbf{\\mu}_k, \\mathbf{Σ}_k)\\) are the parameters and pdf of the kth components respectively.",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Intro to EM"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/em.html#introduction-of-latent-variable",
+    "href": "ml_handbook/em.html#introduction-of-latent-variable",
+    "title": "Intro to EM",
+    "section": "Introduction of Latent Variable",
+    "text": "Introduction of Latent Variable\nWe introduce a K-dimensional latent variable \\(\\mathbf{z}\\); only one of the elements of \\(\\mathbf{z}\\) will be \\(1\\) (\\(1\\)-of-\\(K\\) encoding) (also a standard basis vector).\n\\[\\mathbf{z} = \\mathbf{e}_k\\]\n\nReformulating problem in terms of latent variable \\(\\mathbf{z}\\)\nWe model the marginal distribuon over \\(\\mathbf{z}\\) using our mixing coefficients \\(\\pi_k\\):\n\\[p(\\mathbf{z}=\\mathbf{e}_k) = \\pi_k\\]\nThe conditional distribution of \\(\\mathbf{x}\\) over \\(\\mathbf{z}\\) can be similarly modelled:\n\\[p(\\mathbf{x} | \\mathbf{z}=\\mathbf{e}_k) = \\mathcal{N}(\\mathbf{x}|\\mu_k, Σ_k)\\]\nWe then obtain \\(p(\\mathbf{x})\\) by summing the joint distribution over all possible \\(\\mathbf{z}\\) states:\n\\[p(x) = \\sum_\\mathbf{z}p(\\mathbf{z})p(\\mathbf{x}|\\mathbf{z}) = \\sum_{k=1}^K\\pi_k\\mathcal{N}(\\mathbf{x}|\\mu_k, Σ_k)\\]\nAnd done! We have formulated our goal using this latent variable \\(\\mathbf{z}\\). One more quantity of use is the conditional probablity of \\(\\mathbf{z}=\\mathbf{e}_k\\) given \\(\\mathbf{x}_i\\) (which we will call \\(\\lambda_ik\\)):\n\\[\\lambda_{ik} \\equiv p(\\mathbf{z}=\\mathbf{e}_k) = \\frac{p(\\mathbf{z}=\\mathbf{e}_k)p(\\mathbf{x}|\\mathbf{z}_k=\\mathbf{e}_k)}{\\sum_{j=1}^K p(\\mathbf{z}=\\mathbf{e}_j)p(\\mathbf{x}|\\mathbf{z}_j=\\mathbf{e}_j)} = \\frac{\\pi_k\\mathcal{N}(\\mathbf{x}|\\mu_k, Σ_k)}{\\sum_{j=1}^K \\pi_j\\mathcal{N}(\\mathbf{x}|\\mu_j, Σ_j)}\\]\nBy the reformulation above, we have enabled the application of EM on our problem.\n\n\nLet’s begin!\nTo get started, we perform the following initialization:\n\nPick 2 points at random as cluster centres\nHard-assign points based on proximity to centres\n\n\nK = 2\n\nrng = np.random.default_rng(seed=12)\ncentres = X[rng.integers(low=0, high=len(X), size=K)]\nl = np.array([(lambda i: [int(i==j) for j in range(K)])(np.argmin([np.linalg.norm(p-centre) for centre in centres])) for p in X])\npi = l.sum(axis=0)/l.sum()\n\ncov = []\nfor i in range(K):\n  cov.append(np.cov(X.T, ddof=0, aweights=l[:, i]))\ncov = np.array(cov)\n\ndef plot():\n\n  plt.scatter(X[:, 0], X[:, 1], color='black', marker='+')\n  plt.scatter(centres[:, 0], centres[:, 1], color='red', marker='x')\n\n  probability_grid = np.zeros(grid.shape[:2])\n  for i in range(K):\n    probability_grid += pi[i] * multivariate_normal(centres[i], cov[i]).pdf(grid)\n\n  plt.contour(M, N, probability_grid)\n  plt.show()\n\nplot()",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Intro to EM"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/em.html#posing-a-maximum-likelihood-problem",
+    "href": "ml_handbook/em.html#posing-a-maximum-likelihood-problem",
+    "title": "Intro to EM",
+    "section": "Posing a Maximum Likelihood problem:",
+    "text": "Posing a Maximum Likelihood problem:\nThe log of the likelihood is the following:\n\\[\\ln p(\\mathbf{X}|\\pi, \\mu, Σ) = \\sum_{n=1}^N\\ln \\left\\{{\\sum_{k=1}^K\\pi_k\\mathcal{N}(\\mathbf{x}_n|\\mu_k, \\Sigma_k)}\\right\\}\\]\n\nMaximization step\nTaking derivate of above equation with \\(\\mu_k\\) and setting to zero yields the following:\n\\[\n0 = -\\sum_{n=1}^N \\frac{\\pi_k\\mathcal{N}(\\mathbf{x}_n|\\mu_k, \\Sigma_k)}{\\sum_{j=1}^K\\pi_j\\mathcal{N}(\\mathbf{x}_n|\\mu_j, \\Sigma_j)} Σ_k(\\mathbf{x}_n-\\mu_k) ≡ -\\sum_{n=1}^N \\lambda_{nk}Σ_k(\\mathbf{x}_n-\\mu_k)\n\\]\nMultiplying both sides by \\(Σ_k^{-1}\\) (non-singular; invertible) and rearranging, we get:\n\\[\\mathbf{\\mu}_k = \\frac{1}{N_k}\\sum_{n=1}^{N}\\lambda_{nk}\\mathbf{x}_n\\]\nWhere we define \\(N_k\\) to be the effective number of points assigned to cluster k: \\(N_k = \\sum_{n=1}^N \\lambda_{nk}\\)\nWe follow a similar approach and derive the following ML estimates for \\(\\Sigma_k\\) and \\(\\pi_k\\):\n\\[Σ_k = \\frac{1}{N_k}\\sum_{n=1}^N\\lambda_{nk}(\\mathbf{x}_n-\\mathbf{\\mu}_k)(\\mathbf{x}_n-\\mathbf{\\mu}_k)^T\n\\\\\\pi_k = \\frac{N_k}{N}\n\\]\n\n\nExpectation step\nRecompute \\(\\lambda\\) using the parameter values. Forumula mentioned again for completion sake:\n\\[\\lambda_{ik} = \\frac{\\pi_k\\mathcal{N}(\\mathbf{x}|\\mu_k, Σ_k)}{\\sum_{j=1}^K \\pi_j\\mathcal{N}(\\mathbf{x}|\\mu_j, Σ_j)}\\]\n\n# Expectation Step\ndef Max(l):\n  pi = l.sum(axis=0)/l.sum()\n  centres, cov = [], []\n  for i in range(K):\n    centres.append(np.dot(l[:, i], X)/l[:, i].sum())\n    cov.append(np.cov(X.T, ddof=0, aweights=l[:, i]))\n\n  return pi, np.array(centres), np.array(cov)\n\n# Maximization step\ndef Exp(pi, centres, cov):\n  l = []\n  for i in X:\n    p = np.array([pi[k] * multivariate_normal.pdf(i, mean=centres[k], cov=cov[k]) for k in range(K)])\n    p = p/p.sum()\n    l.append(p)\n\n  return np.array(l)\n\n# Convergence criterion\nnorm_theta = lambda pi, centres, cov: np.linalg.norm(np.r_[pi, centres.reshape(-1), cov.reshape(-1)])\n\n\nfrom IPython.display import HTML\nfrom matplotlib import animation\n\nprev_norm = norm_theta(pi, centres, cov)\n\nfig, ax = plt.subplots()\nartists = []\n\nwhile True:\n  frame = []\n  frame.append(ax.scatter(X[:, 0], X[:, 1], color='black', marker='+'))\n  frame.append(ax.scatter(centres[:, 0], centres[:, 1], color='red', marker='x'))\n\n  probability_grid = np.zeros(grid.shape[:2])\n  for i in range(K):\n    probability_grid += pi[i] * multivariate_normal(centres[i], cov[i]).pdf(grid)\n\n  frame += list(ax.contour(M, N, probability_grid).collections)\n  artists.append(frame)\n\n  l = Exp(pi, centres, cov)\n  pi, centres, cov = Max(l)\n\n  curr_norm = norm_theta(pi, centres, cov)\n\n  if abs(curr_norm-prev_norm) &lt; 0.00001:\n    break\n  else:\n    prev_norm = curr_norm\n\nplt.close()\nanim = animation.ArtistAnimation(fig, artists, interval=200, repeat=False, blit=False);\nHTML(anim.to_jshtml())\n\n\n\n\n\n\n\n\n  \n  \n    \n    \n      \n          \n      \n        \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n    \n    \n      \n      Once\n      \n      Loop\n      \n      Reflect\n    \n  \n\n\n\n\n\n\n\n\nRelation to \\(K\\)-Means?\nThere is a very close similarity. In fact \\(K\\)-Means is a restricted GMM clustering (initalize all \\(Σ_k\\)’s to \\(ϵ\\mathbf{I}\\), with \\(ϵ → 0\\), and do not update in maximization step)\nHow does the above make it \\(K\\)-Means? We investigate \\(\\lambda_{ik}\\):\n\\[\\lambda_{ik} = \\frac{\\pi_k\\mathcal{N}(\\mathbf{x}|\\mu_k, Σ_k)}{\\sum_{j=1}^K \\pi_j\\mathcal{N}(\\mathbf{x}|\\mu_j, Σ_j)} = \\frac{\\pi_k\\exp \\{-||\\mathbf{x}_i-\\mathbf{\\mu}_k||^2/2ϵ\\}}{\\sum_{j=1}^K \\pi_j\\exp \\{-||\\mathbf{x}_i-\\mathbf{\\mu}_j||^2/2ϵ\\}}\\]\nLet \\(\\phi = \\arg \\min f(j) = ||\\mathbf{x}_i-\\mathbf{\\mu}_j||^2\\). Setting \\(ϵ → 0\\), we see that in the denominator the \\(Φ\\)’th term goes to zero the slowest. Hence \\(\\lambda_{n\\phi} → 1\\) while the others \\(→ 0\\) (note that this results in a hard-clustering).\nThe above is equivalent to the K-means clustering paradigm; assign clusters based on proximity from cluster centers.\n\n# (Restricted) Maximization Step\ndef KM_Max(l):\n  pi = l.sum(axis=0)/l.sum()\n  centres, cov = [], []\n  for i in range(K):\n    centres.append(np.dot(l[:, i], X)/l[:, i].sum())\n    cov.append(eps*np.eye(l.shape[1]))\n\n  return pi, np.array(centres), np.array(cov)\n\nK = 2\neps = 0.005\n\nrng = np.random.default_rng(seed=72)\ncentres = X[rng.integers(low=0, high=len(X), size=K)]\nl = np.array([(lambda i: [int(i==j) for j in range(K)])(np.argmin([np.linalg.norm(p-centre) for centre in centres])) for p in X])\npi = l.sum(axis=0)/l.sum()\n\ncov = []\nfor i in range(K):\n  cov.append(eps*np.eye(l.shape[1]))\ncov = np.array(cov)\n\ndef plot():\n\n  plt.scatter(X[:, 0], X[:, 1], color='black', marker='+')\n  plt.scatter(centres[:, 0], centres[:, 1], color='red', marker='x')\n\n  probability_grid = np.zeros(grid.shape[:2])\n  for i in range(K):\n    probability_grid += pi[i] * multivariate_normal(centres[i], cov[i]).pdf(grid)\n\n  plt.contour(M, N, probability_grid)\n  plt.show()\n\nplot()\n\n\n\n\n\n\n\n\n\na, b, c = KM_Max(l)\n[[round(i, 5) for i in j] for j in Exp(a, b, c)[:5]]\n\n[[0.99911, 0.00089], [0.0, 1.0], [0.00082, 0.99918], [0.0, 1.0], [1.0, 0.0]]\n\n\nWe see that the assignments are close to hard-clustering. Setting epsilon to a much smaller value will ensure this better.\nFor visual presentability, epsilon has been set as small as possible.\n\nfrom IPython.display import HTML\nfrom matplotlib import animation\n\nprev_norm = norm_theta(pi, centres, cov)\n\nfig, ax = plt.subplots()\nartists = []\n\nwhile True:\n\n  frame = []\n  frame.append(ax.scatter(X[:, 0], X[:, 1], color='black', marker='+'))\n  frame.append(ax.scatter(centres[:, 0], centres[:, 1], color='red', marker='x'))\n\n  probability_grid = np.zeros(grid.shape[:2])\n  for i in range(K):\n    probability_grid += pi[i] * multivariate_normal(centres[i], cov[i]).pdf(grid)\n\n  frame += list(ax.contour(M, N, probability_grid).collections)\n  artists.append(frame)\n\n  l = Exp(pi, centres, cov)\n  pi, centres, cov = KM_Max(l)\n\n  curr_norm = norm_theta(pi, centres, cov)\n\n  if abs(curr_norm-prev_norm) &lt; 0.0001:\n    print(curr_norm-prev_norm)\n    break\n  else:\n    prev_norm = curr_norm\n\nplt.close()\nanim = animation.ArtistAnimation(fig, artists, interval=1000, repeat=False, blit=False);\nHTML(anim.to_jshtml())\n\n-7.535850650119968e-05\n\n\n\n\n\n\n\n\n\n  \n  \n    \n    \n      \n          \n      \n        \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n      \n          \n    \n    \n      \n      Once\n      \n      Loop\n      \n      Reflect",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Intro to EM"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/ordinal_classification.html",
+    "href": "ml_handbook/ordinal_classification.html",
+    "title": "Ordinal Regression/Classification (Both works)",
+    "section": "",
+    "text": "Let \\(Y^*\\) be the ordinal variable (with \\(J\\) classes) we want to predict. We denote \\(Y^*\\) in terms of the latent continuous variable \\(Y\\) and cutpoints \\(\\alpha_0, \\alpha_1, ..., \\alpha_J\\) as follows \\[\n\\begin{align*}\nY^* &= j \\; \\text{if} \\; \\alpha_{j-1} \\le Y&lt; \\alpha_j \\\\\n&(j = 1, ..., J)\n\\end{align*}\n\\]",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Ordinal Regression/Classification (Both works)"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/ordinal_classification.html#ordinal-measurement",
+    "href": "ml_handbook/ordinal_classification.html#ordinal-measurement",
+    "title": "Ordinal Regression/Classification (Both works)",
+    "section": "",
+    "text": "Let \\(Y^*\\) be the ordinal variable (with \\(J\\) classes) we want to predict. We denote \\(Y^*\\) in terms of the latent continuous variable \\(Y\\) and cutpoints \\(\\alpha_0, \\alpha_1, ..., \\alpha_J\\) as follows \\[\n\\begin{align*}\nY^* &= j \\; \\text{if} \\; \\alpha_{j-1} \\le Y&lt; \\alpha_j \\\\\n&(j = 1, ..., J)\n\\end{align*}\n\\]",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Ordinal Regression/Classification (Both works)"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/ordinal_classification.html#synthetic-data-creation",
+    "href": "ml_handbook/ordinal_classification.html#synthetic-data-creation",
+    "title": "Ordinal Regression/Classification (Both works)",
+    "section": "Synthetic Data Creation",
+    "text": "Synthetic Data Creation\nWe will consider an ordinal classification problem with 4 classes. We randomly sample 1000 points from a standard normal distribution. We fix \\(\\beta = \\begin{pmatrix} -1 \\\\ 1 \\end{pmatrix}\\), and cutpoints \\(\\alpha_0 = -\\infty, \\alpha_1 = -2, \\alpha_2 = -1, \\alpha_3 = 2, \\alpha_4 = \\infty\\)\n\nimport numpy as np\nnp.random.seed(69)\n\nX = np.random.normal(scale=1, size=(1000, 2))\nbeta = np.array([-1, 1])\ncutpoints = np.array([-np.inf, -2, -1, 2, np.inf])\n\n\nfrom sklearn.model_selection import train_test_split\n\nY = X@beta\n\ndef ordify(cutpoints):\n\n  def hlo(x):\n\n    for i in range(len(cutpoints)-1):\n      if cutpoints[i] &lt;= x &lt; cutpoints[i+1]:\n        return i+1\n\n  return hlo\n\nordinate = ordify(cutpoints)\nY_ord = np.array([ordinate(i) for i in Y])\n\n# X_train, X_test, y_train, y_test = train_test_split(X, Y_ord, test_size=0.33, random_state=42)",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Ordinal Regression/Classification (Both works)"
+    ]
+  },
+  {
+    "objectID": "ml_handbook/ordinal_classification.html#how-to-predict",
+    "href": "ml_handbook/ordinal_classification.html#how-to-predict",
+    "title": "Ordinal Regression/Classification (Both works)",
+    "section": "How to predict?",
+    "text": "How to predict?\nFor a validation datapoint \\(x_i\\), use the trained models to calculate estimates \\(\\hat{N_i} \\text{ for } i = 1, 2, \\cdots, K-1\\). We then use these to calculate probabilities of each class as follows:\n\n\n\nClass\nProbability\n\n\n\n\n\\(1\\)\n\\[1 - \\hat{N_1}\\]\n\n\n\\(2\\)\n\\(\\hat{N_1} - \\hat{N_2}\\)\n\n\n\\(i\\)\n\\(\\hat{N_{i-1}} - \\hat{N_i}\\)\n\n\n\\[K-1\\]\n\\(\\hat{N_{K-1}}\\)\n\n\n\nThe first and last class probabilites are from a single classifier, where as the others are the difference of the outputs from a pair of consecutive (w.r.t \\(i\\)) classifiers.\nNote that \\(\\hat{N_i} = \\text{Pr}(y_i &gt; i)\\)\n\nfrom sklearn.base import clone, BaseEstimator, ClassifierMixin\nfrom sklearn.utils.validation import check_X_y, check_is_fitted, check_array\nfrom sklearn.utils.multiclass import check_classification_targets\nimport numpy as np\n\nclass OrdinalClassifier(BaseEstimator, ClassifierMixin):\n\n    def __init__(self,learner):\n        self.learner = learner\n        self.ordered_learners = dict()\n        self.classes = []\n\n    def fit(self,X,y):\n        self.classes = np.sort(np.unique(y))\n        assert self.classes.shape[0] &gt;= 3, f'OrdinalClassifier needs at least 3 classes, only {self.classes.shape[0]} found'\n\n        for i in range(self.classes.shape[0]-1):\n            N_i = np.vectorize(int)(y &gt; self.classes[i])\n            learner = clone(self.learner).fit(X,N_i)\n            self.ordered_learners[i] = learner\n\n    def predict(self,X):\n        return np.vectorize(lambda i: self.classes[i])(np.argmax(self.predict_proba(X), axis=1))\n\n    def predict_proba(self,X):\n        predicted = [self.ordered_learners[k].predict_proba(X)[:,1].reshape(-1,1) for k in self.ordered_learners]\n\n        N_1 = 1-predicted[0]\n        N_K  = predicted[-1]\n        N_i= [predicted[i] - predicted[i+1] for i in range(len(predicted) - 1)]\n\n        probs = np.hstack([N_1, *N_i, N_K])\n\n        return probs\n\n\nfrom sklearn.linear_model import LogisticRegression\nmodel = OrdinalClassifier(LogisticRegression())\nmodel.fit(X, Y_ord)\n\nmodel.score(X, Y_ord)\n\n0.975",
+    "crumbs": [
+      "Home",
+      "ML Handbook",
+      "Ordinal Regression/Classification (Both works)"
+    ]
+  }
+]
