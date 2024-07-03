@@ -1,0 +1,46 @@
+project:
+  type: website
+  # render:
+  #   - "*.qmd"
+  #   - "*.ipynb"
+  #   # - "!ML Handbook/"
+  #   - "!MLT Mentorship/"
+
+execute:
+  freeze: true
+
+website:
+  title: "🎐"
+
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - href: about.qmd
+        text: About
+          
+  sidebar:
+    style: "floating"
+    search: true
+    contents:
+      - section: "ML Handbook"
+        contents:
+          - ml_handbook\inductive_bias.ipynb
+          - ml_handbook\ordinal_classification.ipynb
+          - ml_handbook\em.ipynb
+          - ml_handbook\ppca.ipynb
+          - ml_handbook\agglomerative_clustering.ipynb
+      - section: "MLT TAship"
+        contents:
+          - mlt_taship\w3_k_means_validation.ipynb
+          - mlt_taship\w6_regularization_validation.ipynb
+          - mlt_taship\w9_perceptron_lr.ipynb
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    toc: true
+
+
+
