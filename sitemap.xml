@@ -1,6 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
+    <loc>https://iamviveksrk.github.io/std_xi_workshop/Embeddings/index.html</loc>
+    <lastmod>2024-10-19T07:52:15.579Z</lastmod>
+  </url>
+  <url>
+    <loc>https://iamviveksrk.github.io/std_xi_workshop/hierarchical_clustering.html</loc>
+    <lastmod>2024-10-19T11:28:35.938Z</lastmod>
+  </url>
+  <url>
+    <loc>https://iamviveksrk.github.io/stuff/linalg.html</loc>
+    <lastmod>2024-10-19T15:38:09.829Z</lastmod>
+  </url>
+  <url>
+    <loc>https://iamviveksrk.github.io/about.html</loc>
+    <lastmod>2024-10-19T06:25:35.116Z</lastmod>
+  </url>
+  <url>
+    <loc>https://iamviveksrk.github.io/std_xi_workshop/Embeddings/mario.html</loc>
+    <lastmod>2024-08-08T16:19:04.266Z</lastmod>
+  </url>
+  <url>
+    <loc>https://iamviveksrk.github.io/mlt_taship/w6_regularization_validation.html</loc>
+    <lastmod>2024-05-16T16:49:57.751Z</lastmod>
+  </url>
+  <url>
     <loc>https://iamviveksrk.github.io/ml_handbook/ppca.html</loc>
     <lastmod>2024-05-16T15:17:56.707Z</lastmod>
   </url>
@@ -13,16 +37,12 @@
     <lastmod>2024-05-16T15:25:05.864Z</lastmod>
   </url>
   <url>
-    <loc>https://iamviveksrk.github.io/mlt_taship/w6_regularization_validation.html</loc>
-    <lastmod>2024-05-16T16:49:57.751Z</lastmod>
+    <loc>https://iamviveksrk.github.io/ml_handbook/em.html</loc>
+    <lastmod>2024-05-16T12:11:14.544Z</lastmod>
   </url>
   <url>
-    <loc>https://iamviveksrk.github.io/about.html</loc>
-    <lastmod>2024-07-03T12:29:29.590Z</lastmod>
-  </url>
-  <url>
-    <loc>https://iamviveksrk.github.io/index.html</loc>
-    <lastmod>2024-07-03T11:52:03.800Z</lastmod>
+    <loc>https://iamviveksrk.github.io/ml_handbook/ordinal_classification.html</loc>
+    <lastmod>2024-05-16T10:31:14.724Z</lastmod>
   </url>
   <url>
     <loc>https://iamviveksrk.github.io/mlt_taship/w3_k_means_validation.html</loc>
@@ -33,11 +53,15 @@
     <lastmod>2024-05-16T10:29:02.844Z</lastmod>
   </url>
   <url>
-    <loc>https://iamviveksrk.github.io/ml_handbook/em.html</loc>
-    <lastmod>2024-05-16T12:11:14.544Z</lastmod>
+    <loc>https://iamviveksrk.github.io/index.html</loc>
+    <lastmod>2024-10-19T06:24:06.054Z</lastmod>
   </url>
   <url>
-    <loc>https://iamviveksrk.github.io/ml_handbook/ordinal_classification.html</loc>
-    <lastmod>2024-05-16T10:31:14.724Z</lastmod>
+    <loc>https://iamviveksrk.github.io/std_xi_workshop/embeddings.html</loc>
+    <lastmod>2024-10-19T11:25:05.932Z</lastmod>
+  </url>
+  <url>
+    <loc>https://iamviveksrk.github.io/std_xi_workshop/hierarchical_clustering/index.html</loc>
+    <lastmod>2024-10-19T11:32:19.906Z</lastmod>
   </url>
 </urlset>
