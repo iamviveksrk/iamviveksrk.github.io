@@ -1,0 +1,94 @@
+---
+title: "Some interesting Linear-Algrebra Questions"
+author: "Vivek Sivaramakrishnan"
+format: 
+    revealjs:
+        navigation-mode: vertical
+        controls: true
+        incremental: true
+        mermaid:
+            theme: dark
+---
+
+# Question 1: Steepest Ascent 🧗🏼
+
+Why is it that a step along the direction of the gradient results in the highest increase of a function?
+
+## Consider the following expression:
+
+. . .
+
+$$
+D_\mathbf{u} f(\mathbf{x}) = \lim_{\alpha \to 0} \frac{f(\mathbf{x} + \alpha \mathbf{u}) - f(\mathbf{x})}{\alpha}
+$$
+
+- $D_\mathbf{u} f(\mathbf{x})$ is the *directional derivarive* of the function $f$ at the point $\mathbf{x}$ along a direction $\mathbf{u}$. 
+
+- Since $\mathbf{u}$ is purely used here to denote direction, we set $||\mathbf{u}||^2 = 1$.
+
+- So we are essentially trying to find a $\mathbf{u}$ such that $D_\mathbf{u} f(\mathbf{x})$ is maximized.
+
+---
+
+- Let's evaluate the limit
+
+- Since we are setting $\alpha \to 0$, we can consider the linear approximation of $f$ around $\mathbf{x}$ in our limit:
+
+. . .
+
+$$
+f(\mathbf{\tilde{x}}) \approx f(\mathbf{x}) + \nabla f(\mathbf{x}) \cdot (\mathbf{x} - \mathbf{\tilde{x}})
+$$
+
+- Substituting the approximation in the limit, we get:
+
+---
+
+. . .
+
+$$
+\begin{align*}
+D_\mathbf{u} f(\mathbf{x}) &= \lim_{\alpha \to 0} \frac{f(\mathbf{x} + \alpha \mathbf{u}) - f(\mathbf{x})}{\alpha} \\
+&= \lim_{\alpha \to 0} \frac{f(\mathbf{x}) + \nabla f(\mathbf{x}) \cdot (\alpha \mathbf{u}) - f(\mathbf{x})}{\alpha} \\
+&= \lim_{\alpha \to 0} \frac{\alpha \times \nabla f(\mathbf{x}) \cdot \mathbf{u}}{\alpha} \\
+&= \nabla f(\mathbf{x}) \cdot \mathbf{u}
+\end{align*}
+$$
+
+- Hence the directional-derivative is essentially the dot product of the gradient vector $\nabla f(\mathbf{x})$ with the direction vector $\mathbf{u}$
+
+- Now, what is the range of $\nabla f(\mathbf{x}) \cdot \mathbf{u}$? (remember, we wanted to maximize this)
+
+## Enter Cauchy-Schwarz
+
+$$
+(\mathbf{a} \cdot \mathbf{b})^2 \le ||\mathbf{a}||^2||\mathbf{b}||^2
+$$
+
+. . .
+
+$$
+\implies -||\mathbf{a}||\times||\mathbf{b}|| \le (\mathbf{a} \cdot \mathbf{b}) \le ||\mathbf{a}||\times||\mathbf{b}||
+$$
+
+- Setting $\mathbf{a} = \nabla f(\mathbf{x})$ and $\mathbf{b} = \mathbf{u}$, we get
+
+. . .
+
+$$
+-||\nabla f(\mathbf{x})|| \le \nabla f(\mathbf{x}) \cdot \mathbf{u} \le ||\nabla f(\mathbf{x})||
+$$
+
+- with maximum at $\mathbf{u} = \frac{\nabla f(\mathbf{x})}{||\nabla f(\mathbf{x})||}$, which is the direction along the gradient, as required.
+
+# Question 2: An interesting Trace 📝 property
+
+Why is $\operatorname{trace}(ABC)$ = $\operatorname{trace}(BCA)$ = $\operatorname{trace}(CAB)$ ? (Cyclic Permutations)
+
+# Question 3: Another 🤯 trace property
+
+Why is the trace equal to the sum of eigenvalues?
+
+# Question 4: The eigenvalue appears, again 🫠
+
+Why is $\underset{{w \in \mathbb{R}^n}}{\max} w^T C w = \lambda_1$, where $\lambda_1$ is the largest eigenvalue of the matrix $C$? 

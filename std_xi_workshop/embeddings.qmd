@@ -1,0 +1,8 @@
+---
+title: Embeddings - Slide Deck
+format: html
+---
+
+```{=html}
+<iframe class="slide-deck column-page-right" src="Embeddings\index.html"></iframe>
+```
